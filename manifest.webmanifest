@@ -1,0 +1,17 @@
+{
+  "name": "وزن — ميزان الشعر الفصيح",
+  "short_name": "وزن",
+  "description": "يكشف بحر البيت الفصيح وتقطيعه وموضع الكسر فيه",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f2e9",
+  "theme_color": "#0f5c52",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>وزن — ميزان الشعر الفصيح</title>
+  <meta name="description" content="وزن: يكشف بحر البيت الفصيح وتقطيعه وتفعيلاته وموضع الكسر فيه، ويعمل بلا إنترنت.">
+  <meta name="theme-color" content="#0f5c52">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="وزن">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 64 64" width="34" height="34"><g fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M32 10v40M20 54h24M12 20h40"/><path d="M12 20 5 36h14zM52 20l-7 16h14z"/><circle cx="32" cy="10" r="2.4" fill="currentColor"/></g></svg>
+      </span>
+      <div>
+        <h1>وزن</h1>
+        <p class="tag">ميزان الشعر العربي الفصيح</p>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" class="tab active" data-tab="weigh">زِن</button>
+      <button role="tab" class="tab" data-tab="meters">البحور</button>
+      <button role="tab" class="tab" data-tab="about">عن وزن</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="tab-weigh" class="panel active">
+      <label for="verse" class="sr">الأبيات</label>
+      <textarea id="verse" rows="4" spellcheck="false" autocomplete="off"
+        placeholder="اكتب البيت هنا، وافصل الشطرين بنجمة *&#10;مثال: قفا نبكِ من ذكرى حبيبٍ ومنزلِ * بسقطِ اللوى بين الدخولِ فحوملِ"></textarea>
+      <div class="actions">
+        <button id="go" class="primary" disabled>زِنْ</button>
+        <button id="sample" class="ghost">مثال</button>
+        <button id="clear" class="ghost">مسح</button>
+        <span id="status" class="status">يحمّل القاموس…</span>
+      </div>
+      <p class="hint">بيت في كل سطر، وافصل الشطرين بـ <b>*</b> أو بثلاث مسافات، أو اكتب كل شطر في سطر. وكلما شكّلت الكلمات كان الوزن أدق.</p>
+      <div id="results" aria-live="polite"></div>
+    </section>
+
+    <section id="tab-meters" class="panel">
+      <p class="lead">البحور الستة عشر بمفاتيحها (لصفي الدين الحلي) وتفعيلاتها. اضغط على أي بحر لتجرّب مفتاحه.</p>
+      <div id="meters" class="meters"></div>
+    </section>
+
+    <section id="tab-about" class="panel">
+      <div class="prose">
+        <h2>كيف يزن؟</h2>
+        <p>يكتب «وزن» البيت كتابةً عروضية: ما يُنطق يُكتب وما لا يُنطق يُحذف؛ فالحرف المشدد حرفان، والتنوين نون ساكنة، وتسقط همزة الوصل في الدَّرج، وتُشبَع حركة آخر الشطر. ثم يحوّله إلى متحركات (/) وسواكن (ه)، ويطابقه على صور البحور الستة عشر بزحافاتها وعللها، فيعطيك البحر والتفعيلات، وإن كان في البيت كسر دلّك على موضعه وسببه.</p>
+        <h2>والكلمات غير المشكولة؟</h2>
+        <p>معه قاموس فيه نطق أكثر من مئة وسبعين ألف كلمة، جُمع من نصوص تراثية مشكولة ومن دواوين الشعر. فإذا كتبت بلا تشكيل جرّب النطوق المحتملة لكل كلمة واختار ما يستقيم به الوزن. وإذا لم يجد الكلمة في القاموس قدّر تشكيلها، ووضع تحتها خطاً منقّطاً حتى تتأكد منها.</p>
+        <h2>الدقة</h2>
+        <p id="accuracy">جُرّب على أبيات معروفة البحور لم يدخل شيء منها في القاموس، فأصاب البحر في <b>٩٤٪</b> منها تقريباً. وأكثر ما يخطئ فيه البحور المتشابهة في أصلها، كالرجز والكامل المضمر، والسريع والرجز، والهزج ومجزوء الوافر؛ وهذه لا يحسم الأمرَ فيها إلا بقية أبيات القصيدة.</p>
+        <h2>بلا إنترنت</h2>
+        <p>بعد أول فتح يعمل «وزن» كاملاً بلا اتصال، ولا يُرسل شيئاً مما تكتب إلى أي مكان.</p>
+        <p class="ver">الإصدار <span id="ver"></span></p>
+      </div>
+    </section>
+  </main>
+
+  <template id="tpl-result">
+    <article class="card">
+      <header class="card-head">
+        <div class="meter"></div>
+        <span class="badge"></span>
+      </header>
+      <div class="notes"></div>
+      <div class="hemis"></div>
+      <div class="alts"></div>
+    </article>
+  </template>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
