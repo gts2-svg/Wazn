@@ -137,9 +137,12 @@ function renderResult(r) {
   }
   node.querySelector('.meter').innerHTML = meterTitle(r);
   const badge = node.querySelector('.badge');
-  const nErr = r.hemistichs.reduce((s, h) => s + h.errors.length, 0);
+  const nBad = r.hemistichs.reduce((s, h) => s + h.feet.filter(f => !f.ok).length, 0);
   if (r.exact) { badge.textContent = 'موزون ✓'; badge.classList.add('ok'); }
-  else { badge.textContent = nErr === 1 ? 'مكسور: خلل واحد' : `مكسور: ${nErr} مواضع`; badge.classList.add('bad'); }
+  else {
+    badge.textContent = nBad === 1 ? 'مكسور في تفعيلة' : nBad === 2 ? 'مكسور في تفعيلتين' : `مكسور في ${nBad} تفعيلات`;
+    badge.classList.add('bad');
+  }
 
   const notes = [];
   if (r.autoSplit) notes.push('<p>قسّمتُ البيت إلى صدر وعجز تلقائياً.</p>');
