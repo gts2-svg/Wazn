@@ -5,7 +5,7 @@ import { getSettings, saveSettings, hasKey, testKey, compose, suggestFix, MODELS
 import { checkRhymes } from './src/engine.js';
 import { verseProblems, sym } from './src/explain.js';
 
-const VERSION = '1.2.0';
+const VERSION = '1.2.1';
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -309,7 +309,8 @@ $('#write-form').addEventListener('submit', async (e) => {
     out.appendChild(renderPoem(res, p));
   } catch (err) {
     st.textContent = '';
-    out.innerHTML = `<p class="err-box">${esc(err instanceof AIError ? err.message : 'حدث خطأ: ' + err.message)}</p>`;
+    out.innerHTML = `<p class="err-box">${esc(err instanceof AIError ? err.message : 'حدث خطأ: ' + err.message)}</p>` +
+      (err.raw ? `<details class="more"><summary>نص الرد</summary><pre class="raw">${esc(err.raw)}</pre></details>` : '');
   } finally {
     $('#w-go').disabled = false;
   }

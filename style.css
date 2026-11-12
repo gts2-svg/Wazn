@@ -188,3 +188,5 @@ hr.soft { border: 0; border-top: 1px dashed var(--line); margin: 8px 0; }
 .rhyme-card .meter { font-size: 20px; }
 .broken-list:empty { display: none; }
 .broken-list { margin-top: 10px; }
+
+pre.raw { white-space: pre-wrap; font-size: 13px; background: var(--bg); padding: 8px; border-radius: 8px; }

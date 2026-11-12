@@ -1,5 +1,5 @@
 // وزن — يعمل بلا إنترنت بعد أول فتح
-const CACHE = 'wazn-v1.2.0';
+const CACHE = 'wazn-v1.2.1';
 const FILES = [
   './', 'index.html', 'style.css', 'app.js', 'worker.js', 'manifest.webmanifest',
   'src/arabic.js', 'src/meters.js', 'src/engine.js', 'src/ai.js', 'src/explain.js', 'data/dict.tsv',

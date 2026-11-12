@@ -57,13 +57,65 @@ let transport = async (body, key) => {
 // للاختبار فقط
 export function setTransport(fn) { transport = fn; }
 
-async function callClaude({ model, system, messages, maxTokens = 2500 }) {
+async function callClaude({ model, system, messages, maxTokens = 4000, tool = null }) {
   const { key } = getSettings();
   if (!key) throw new AIError('أضف مفتاح الـ API من الإعدادات أولاً.');
-  const data = await transport({ model, max_tokens: maxTokens, system, messages }, key);
-  const text = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
-  return { text, usage: data.usage || {} };
+  const body = { model, max_tokens: maxTokens, system, messages };
+  if (tool) { body.tools = [tool]; body.tool_choice = { type: 'tool', name: tool.name }; }
+  const data = await transport(body, key);
+  const content = data.content || [];
+  const text = content.filter(c => c.type === 'text').map(c => c.text).join('');
+  const use = content.find(c => c.type === 'tool_use');
+  return { text, input: use ? use.input : null, toolId: use ? use.id : null, content, stop: data.stop_reason, usage: data.usage || {} };
 }
+
+// يستخرج الكائن من الأداة، وإلا من النص
+function payload(res) {
+  if (res.input && typeof res.input === 'object') return res.input;
+  try { return parseJSON(res.text); }
+  catch (e) {
+    const why = res.stop === 'max_tokens' ? 'انقطع الرد لطوله.' : res.stop === 'refusal' ? 'اعتذر النموذج عن الطلب.' : 'جاء الرد بصيغة غير متوقعة.';
+    const err = new AIError(why + ' حاول مرة ثانية.');
+    err.raw = (res.text || '').slice(0, 600);
+    throw err;
+  }
+}
+
+// رسالتا المتابعة بعد رد استعمل الأداة
+function followUp(messages, res, text) {
+  if (res.toolId) {
+    messages.push({ role: 'assistant', content: res.content });
+    messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: res.toolId, content: 'وصلت الأبيات وفُحصت.' }, { type: 'text', text }] });
+  } else {
+    messages.push({ role: 'assistant', content: res.text });
+    messages.push({ role: 'user', content: text });
+  }
+}
+
+const VERSES_TOOL = {
+  name: 'submit_verses',
+  description: 'سلّم الأبيات المؤلفة مشكولة تشكيلاً كاملاً.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      meter: { type: 'string', description: 'اسم البحر' },
+      rawi: { type: 'string', description: 'حرف الروي' },
+      verses: { type: 'array', items: { type: 'object', properties: { sadr: { type: 'string' }, ajz: { type: 'string' } }, required: ['sadr', 'ajz'] } },
+    },
+    required: ['meter', 'verses'],
+  },
+};
+const FIX_TOOL = {
+  name: 'submit_suggestions',
+  description: 'سلّم الصيغ المقترحة للبيت مشكولة تشكيلاً كاملاً.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      suggestions: { type: 'array', items: { type: 'object', properties: { sadr: { type: 'string' }, ajz: { type: 'string' }, note: { type: 'string' } }, required: ['sadr', 'ajz'] } },
+    },
+    required: ['suggestions'],
+  },
+};
 
 export async function testKey() {
   const { fixModel } = getSettings();
@@ -119,8 +171,7 @@ const COMPOSE_SYSTEM = `أنت شاعر عربي فصيح متمكن من عرو
 - إن ذُكر اسم فاجعله في بيت واحد على الأقل إن استقام به الوزن.
 - وحّد حركة الروي في كل الأبيات، والتزم الردف إن بدأت به، ولا تكرر كلمة القافية.
 - إن كان الغرض هجاءً فاجعله هجاءً ظريفاً من باب الدعابة والممازحة بين الأصحاب: لا فحش، ولا قذف، ولا طعن في نسب أو قبيلة أو عرض أو دين أو لون، ولا اتهام بجرم، ولا تهديد.
-أخرج JSON فقط بلا أي كلام قبله أو بعده، بهذا الشكل:
-{"meter":"اسم البحر","rawi":"حرف الروي","verses":[{"sadr":"الصدر","ajz":"العجز"}]}`;
+سلّم الأبيات عبر الأداة submit_verses: كل بيت صدر وعجز، مع اسم البحر وحرف الروي.`;
 
 export const PURPOSES = ['مدح', 'تهنئة', 'رثاء', 'شكر', 'حكمة', 'غزل عفيف', 'هجاء'];
 
@@ -149,13 +200,11 @@ export async function compose(p, check, onProgress = () => {}) {
   let verses = [];
   let results = [];
   let round = 0;
-  let lastText = '';
 
   while (true) {
     onProgress(round === 0 ? 'يكتب الأبيات…' : `يصلح ما انكسر (المحاولة ${round} من ${MAX_FIX_ROUNDS})…`);
-    const { text } = await callClaude({ model: composeModel, system: COMPOSE_SYSTEM, messages });
-    lastText = text;
-    const data = parseJSON(text);
+    const res = await callClaude({ model: composeModel, system: COMPOSE_SYSTEM, messages, tool: VERSES_TOOL });
+    const data = payload(res);
     const vs = (data.verses || []).filter(v => v && v.sadr && v.ajz).map(v => ({ sadr: String(v.sadr).trim(), ajz: String(v.ajz).trim() }));
     if (!vs.length) throw new AIError('لم تصل أبيات. حاول مرة ثانية.');
     verses = vs;
@@ -181,11 +230,8 @@ export async function compose(p, check, onProgress = () => {}) {
 
     if (!problems.length || round >= MAX_FIX_ROUNDS) break;
     round++;
-    messages.push({ role: 'assistant', content: text });
-    messages.push({
-      role: 'user',
-      content: `فحص الميزان الآلي الأبيات على ${target} (${METER_INFO[target] ? METER_INFO[target].feet : ''})${rawi ? ` وعلى روي «${rawi}»` : ''}، والرمز / متحرك وه ساكن. هذه الأبيات انكسرت:\n\n${problems.join('\n\n')}\n\nأصلح هذه الأبيات وحدها بأقل تغيير يحفظ المعنى، وأبقِ السليم كما هو حرفاً بحرف، وشكّل كل حرف، ثم أعد JSON كاملاً بكل الأبيات بالترتيب نفسه.`,
-    });
+    followUp(messages, res,
+      `فحص الميزان الآلي الأبيات على ${target} (${METER_INFO[target] ? METER_INFO[target].feet : ''})${rawi ? ` وعلى روي «${rawi}»` : ''}، والرمز / متحرك وه ساكن. هذه الأبيات انكسرت:\n\n${problems.join('\n\n')}\n\nأصلح هذه الأبيات وحدها بأقل تغيير يحفظ المعنى، وأبقِ السليم كما هو حرفاً بحرف، وشكّل كل حرف، ثم سلّم الأبيات كلها من جديد بالترتيب نفسه.`);
   }
 
   return {
@@ -199,7 +245,7 @@ export async function compose(p, check, onProgress = () => {}) {
 const FIX_SYSTEM = `أنت عروضي وشاعر فصيح. يُعطى لك بيت فيه كسر في الوزن أو عيب في القافية، مع موضعه ووجهه كما حددهما ميزان آلي.
 اقترح ثلاث صيغ سليمة للبيت على البحر والقافية المطلوبين، بأقل تغيير ممكن يحفظ معنى الشاعر وألفاظه. وإن كان العيب في الوزن وحده فحافظ على كلمة القافية.
 شكّل كل حرف تشكيلاً كاملاً.
-أخرج JSON فقط: {"suggestions":[{"sadr":"...","ajz":"...","note":"ما الذي غيّرته باختصار"}]}`;
+سلّم الصيغ عبر الأداة submit_suggestions، ومع كل صيغة ملاحظة قصيرة بما غيّرته.`;
 
 // opts: { rhymeIssues: [{kind,msg}], rawi, haraka }
 export async function suggestFix(r, check, onProgress = () => {}, opts = {}) {
@@ -224,8 +270,8 @@ export async function suggestFix(r, check, onProgress = () => {}, opts = {}) {
   const good = [];
   for (let round = 0; round < 2 && good.length === 0; round++) {
     onProgress(round === 0 ? 'يقترح تعديلاً…' : 'يحاول مرة ثانية…');
-    const { text } = await callClaude({ model: fixModel, system: FIX_SYSTEM, messages, maxTokens: 1500 });
-    const data = parseJSON(text);
+    const resp = await callClaude({ model: fixModel, system: FIX_SYSTEM, messages, maxTokens: 2500, tool: FIX_TOOL });
+    const data = payload(resp);
     const sugg = (data.suggestions || []).filter(s => s && s.sadr && s.ajz);
     if (!sugg.length) continue;
     onProgress('يزن الاقتراحات…');
@@ -239,8 +285,7 @@ export async function suggestFix(r, check, onProgress = () => {}, opts = {}) {
       }
     });
     if (!good.length) {
-      messages.push({ role: 'assistant', content: text });
-      messages.push({ role: 'user', content: `كل الاقتراحات لم تسلم عند الفحص:\n\n${bad.join('\n\n')}\n\nاقترح ثلاث صيغ أخرى سليمة الوزن والقافية، وشكّل كل حرف، وأعد JSON بالشكل نفسه.` });
+      followUp(messages, resp, `كل الاقتراحات لم تسلم عند الفحص:\n\n${bad.join('\n\n')}\n\nاقترح ثلاث صيغ أخرى سليمة الوزن والقافية، وشكّل كل حرف.`);
     }
   }
   return good;
