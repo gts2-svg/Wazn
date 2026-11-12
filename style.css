@@ -173,3 +173,18 @@ details.more summary { cursor: pointer; color: var(--accent); font-size: 14px; }
   .poem { font-size: 19px; }
   .bayt .s2 { padding-inline-start: 8%; }
 }
+
+.probs { margin-top: 10px; background: var(--bad-soft); border-radius: 12px; padding: 8px 12px; }
+.probs-h { font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 2px; }
+.probs .errs { margin: 0; color: var(--ink); }
+.probs .errs li { margin: 4px 0; line-height: 1.7; }
+.probs .errs li::before { content: ""; }
+.probs .errs b { color: var(--bad); }
+.probs .can { color: var(--muted); }
+.sugg { background: var(--ok-soft); border-radius: 12px; padding: 8px 12px; border-top: 0; }
+hr.soft { border: 0; border-top: 1px dashed var(--line); margin: 8px 0; }
+.check { display: flex !important; align-items: center; gap: 8px; color: var(--ink) !important; }
+.check input { width: auto !important; margin: 0 !important; }
+.rhyme-card .meter { font-size: 20px; }
+.broken-list:empty { display: none; }
+.broken-list { margin-top: 10px; }

@@ -1,12 +1,15 @@
 // وزن — التأليف واقتراح التصحيح بالذكاء الاصطناعي
 // المفتاح يُحفظ على هذا الجهاز فقط، ويُرسل مباشرة إلى Anthropic
 import { METER_INFO } from './meters.js';
+import { checkRhymes } from './engine.js';
+import { verseProblems, sym } from './explain.js';
 
 export const MODELS = [
   { id: 'claude-opus-5-5', label: 'Opus 5.5 — أجود شعراً' },
   { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5 — أسرع وأرخص' },
 ];
-const DEFAULTS = { key: '', composeModel: 'claude-opus-5-5', fixModel: 'claude-sonnet-5-5' };
+const DEFAULTS = { key: '', composeModel: 'claude-opus-5-5', fixModel: 'claude-sonnet-5-5', autoFix: true };
+export const AUTO_FIX_LIMIT = 3;
 const MAX_FIX_ROUNDS = 3;
 
 export function getSettings() {
@@ -84,22 +87,12 @@ export function normalizeMeter(name) {
   return METERS.find(m => m === n || m === 'ال' + n || m.slice(2) === n.replace(/^ال/, '')) || null;
 }
 
-const sym = s => [...(s || '')].map(b => b === '1' ? '/' : 'ه').join('');
-
-// وصف الكسر بلغة يفهمها الشاعر
-function describeProblems(r, targetMeter) {
-  const out = [];
+// وصف الكسر بلغة العروض (من قواعد المحرك)
+export function describeProblems(r, targetMeter) {
   if (!r || r.empty || r.error) return ['لم يُفهم البيت.'];
+  const out = [];
   if (targetMeter && r.meter !== targetMeter) out.push(`ليس على ${targetMeter}.`);
-  const labels = r.hemistichs.length === 2 ? ['الصدر', 'العجز'] : ['البيت'];
-  r.hemistichs.forEach((h, hi) => {
-    if (!h) return;
-    h.feet.forEach((f, k) => {
-      if (f.ok) return;
-      const ws = f.words.map(i => h.words[i] && h.words[i].text).filter(Boolean).join(' ');
-      out.push(`${labels[hi]}، التفعيلة ${k + 1}: المطلوب ${f.name || ''} (${sym(f.vp || f.exp)}) وجاء (${sym(f.got)}) عند «${ws}» — مقطّعة: ${f.text}`);
-    });
-  });
+  for (const p of verseProblems(r)) out.push(`${p.text}${p.cut ? ` (تقطيعها كما قُرئت: ${p.cut})` : ''}`);
   return out;
 }
 
@@ -124,10 +117,12 @@ const COMPOSE_SYSTEM = `أنت شاعر عربي فصيح متمكن من عرو
 - لا تخترع عن الشخص أخباراً أو ألقاباً أو أنساباً أو مناصب لم تُذكر لك؛ ابنِ المعاني على ما أُعطيت وعلى المعاني العامة اللائقة بالغرض.
 - اجعل المعاني متماسكة غير مبتذلة، وتجنب الحشو وتكرار القوافي.
 - إن ذُكر اسم فاجعله في بيت واحد على الأقل إن استقام به الوزن.
+- وحّد حركة الروي في كل الأبيات، والتزم الردف إن بدأت به، ولا تكرر كلمة القافية.
+- إن كان الغرض هجاءً فاجعله هجاءً ظريفاً من باب الدعابة والممازحة بين الأصحاب: لا فحش، ولا قذف، ولا طعن في نسب أو قبيلة أو عرض أو دين أو لون، ولا اتهام بجرم، ولا تهديد.
 أخرج JSON فقط بلا أي كلام قبله أو بعده، بهذا الشكل:
 {"meter":"اسم البحر","rawi":"حرف الروي","verses":[{"sadr":"الصدر","ajz":"العجز"}]}`;
 
-export const PURPOSES = ['مدح', 'تهنئة', 'رثاء', 'شكر', 'حكمة', 'غزل عفيف'];
+export const PURPOSES = ['مدح', 'تهنئة', 'رثاء', 'شكر', 'حكمة', 'غزل عفيف', 'هجاء'];
 
 function composePrompt(p) {
   const lines = [`الغرض: ${p.purpose}`];
@@ -150,6 +145,7 @@ export async function compose(p, check, onProgress = () => {}) {
   const messages = [{ role: 'user', content: composePrompt(p) }];
   let target = p.meter || null;
   let rawi = p.rawi || null;
+  let haraka = null;
   let verses = [];
   let results = [];
   let round = 0;
@@ -171,12 +167,15 @@ export async function compose(p, check, onProgress = () => {}) {
     }
     results = await check(verses.map(v => ({ parts: [v.sadr, v.ajz], meter: target })));
     if (!rawi) rawi = majority(results.filter(r => r && r.exact).map(r => r.rhyme)) || data.rawi || null;
+    const rh = checkRhymes(results.map(r => r && r.rhymeInfo), { rawi });
+    haraka = rh.haraka && rh.haraka !== 'السكون' ? rh.haraka : null;
 
     const problems = [];
     results.forEach((r, i) => {
       const pr = r && r.exact ? [] : describeProblems(r, target);
-      if (rawi && r && r.rhyme && r.rhyme !== rawi) pr.push(`رويّه «${r.rhyme}» والمطلوب «${rawi}».`);
+      for (const iss of rh.issues[i]) pr.push(`عيب في القافية (${iss.kind}): ${iss.msg}.`);
       verses[i].ok = pr.length === 0;
+      verses[i].rhymeIssues = rh.issues[i];
       if (pr.length) problems.push(`البيت ${i + 1}: ${verseText(verses[i])}\n- ${pr.join('\n- ')}`);
     });
 
@@ -190,30 +189,41 @@ export async function compose(p, check, onProgress = () => {}) {
   }
 
   return {
-    meter: target, rawi, rounds: round,
+    meter: target, rawi, haraka, rounds: round,
     verses: verses.map((v, i) => ({ ...v, result: results[i] })),
   };
 }
 
 /* ---------------- اقتراح التصحيح ---------------- */
 
-const FIX_SYSTEM = `أنت عروضي وشاعر فصيح. يُعطى لك بيت مكسور الوزن مع موضع الكسر كما حدده ميزان آلي.
-اقترح ثلاث صيغ موزونة للبيت على البحر المطلوب، بأقل تغيير ممكن يحفظ معنى الشاعر وألفاظه، وحافظ على كلمة القافية إن أمكن.
+const FIX_SYSTEM = `أنت عروضي وشاعر فصيح. يُعطى لك بيت فيه كسر في الوزن أو عيب في القافية، مع موضعه ووجهه كما حددهما ميزان آلي.
+اقترح ثلاث صيغ سليمة للبيت على البحر والقافية المطلوبين، بأقل تغيير ممكن يحفظ معنى الشاعر وألفاظه. وإن كان العيب في الوزن وحده فحافظ على كلمة القافية.
 شكّل كل حرف تشكيلاً كاملاً.
 أخرج JSON فقط: {"suggestions":[{"sadr":"...","ajz":"...","note":"ما الذي غيّرته باختصار"}]}`;
 
-export async function suggestFix(verse, r, check, onProgress = () => {}) {
+// opts: { rhymeIssues: [{kind,msg}], rawi, haraka }
+export async function suggestFix(r, check, onProgress = () => {}, opts = {}) {
   const { fixModel } = getSettings();
   const meter = r.meter;
   const parts = r.input && r.input.parts ? r.input.parts : null;
-  const original = parts ? `${parts[0]} * ${parts[1] || ''}` : verse;
+  const original = parts ? `${parts[0]} * ${parts[1] || ''}` : (r.input && r.input.text) || '';
+  const probs = r.exact ? [] : describeProblems(r, meter);
+  for (const iss of opts.rhymeIssues || []) probs.push(`عيب في القافية (${iss.kind}): ${iss.msg}.`);
+  const rhymeWant = opts.rawi ? `\nالقافية المطلوبة: الروي «${opts.rawi}»${opts.haraka ? ` وحركته ${opts.haraka}` : ''}.` : '';
   const messages = [{
     role: 'user',
-    content: `البحر المقصود: ${meter} (${METER_INFO[meter] ? METER_INFO[meter].feet : ''})\nالبيت: ${original}\nموضع الكسر (/ متحرك، ه ساكن):\n- ${describeProblems(r, meter).join('\n- ')}`,
+    content: `البحر المقصود: ${meter} (${METER_INFO[meter] ? METER_INFO[meter].feet : ''})${rhymeWant}\nالبيت: ${original}\nما وجده الميزان (/ متحرك، ه ساكن):\n- ${probs.join('\n- ')}`,
   }];
+  const rhymeOK = (res) => {
+    if (!opts.rawi) return true;
+    const ri = res.rhymeInfo;
+    if (!ri || ri.rawi !== opts.rawi) return false;
+    if (opts.haraka && ri.haraka && ri.haraka !== opts.haraka) return false;
+    return true;
+  };
   const good = [];
   for (let round = 0; round < 2 && good.length === 0; round++) {
-    onProgress(round === 0 ? 'يقترح…' : 'يحاول مرة ثانية…');
+    onProgress(round === 0 ? 'يقترح تعديلاً…' : 'يحاول مرة ثانية…');
     const { text } = await callClaude({ model: fixModel, system: FIX_SYSTEM, messages, maxTokens: 1500 });
     const data = parseJSON(text);
     const sugg = (data.suggestions || []).filter(s => s && s.sadr && s.ajz);
@@ -222,12 +232,15 @@ export async function suggestFix(verse, r, check, onProgress = () => {}) {
     const res = await check(sugg.map(s => ({ parts: [s.sadr, s.ajz], meter })));
     const bad = [];
     sugg.forEach((s, i) => {
-      if (res[i] && res[i].exact) good.push({ ...s, result: res[i] });
-      else bad.push(`${verseText(s)}\n- ${describeProblems(res[i], meter).join('\n- ')}`);
+      if (res[i] && res[i].exact && rhymeOK(res[i])) good.push({ ...s, result: res[i] });
+      else {
+        const pr = res[i] && res[i].exact ? ['خالف القافية المطلوبة.'] : describeProblems(res[i], meter);
+        bad.push(`${verseText(s)}\n- ${pr.join('\n- ')}`);
+      }
     });
     if (!good.length) {
       messages.push({ role: 'assistant', content: text });
-      messages.push({ role: 'user', content: `كل الاقتراحات انكسرت عند الفحص:\n\n${bad.join('\n\n')}\n\nاقترح ثلاث صيغ أخرى موزونة، وشكّل كل حرف، وأعد JSON بالشكل نفسه.` });
+      messages.push({ role: 'user', content: `كل الاقتراحات لم تسلم عند الفحص:\n\n${bad.join('\n\n')}\n\nاقترح ثلاث صيغ أخرى سليمة الوزن والقافية، وشكّل كل حرف، وأعد JSON بالشكل نفسه.` });
     }
   }
   return good;

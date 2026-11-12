@@ -553,6 +553,10 @@ export function matchHemistich(words, opts = {}) {
 
 /* ----------------------------- إعادة بناء المسار ----------------------------- */
 
+// كل صور التفعيلات المعروفة: لتسمية ما جاء في الموضع المكسور
+const KNOWN = new Map();
+for (const F of FORMS) for (const sl of F.slots) for (const v of sl) if (!KNOWN.has(v.p)) KNOWN.set(v.p, { name: v.name, note: v.note });
+
 function walk(back) {
   const ops = [];
   for (let b = back; b; b = b.prev) ops.push(b);
@@ -609,7 +613,11 @@ export function explain(match, fi) {
   }
   return {
     formIndex: fi, meter: F.meter, form: F.form, cost: e.cost, err: e.err,
-    feet: feet.map(f => ({ ...f, words: [...f.words] })),
+    feet: feet.map((f, k) => ({
+      ...f, words: [...f.words],
+      allowed: F.slots[k].map(v => ({ p: v.p, name: v.name, note: v.note })),
+      gotName: f.ok ? null : (KNOWN.get(f.got) || null),
+    })),
     errors,
     words: match.words.map((w, i) => ({ text: w, display: chosen[i] ? chosen[i].display : w, generic: chosen[i] ? chosen[i].generic : false, src: chosen[i] ? chosen[i].src : '' })),
   };
@@ -715,28 +723,104 @@ export function analyzeVerse(line, opts = {}) {
     const altsD = bestOf(md);
     if (altsD[0] && (!res || altsD[0].cost + 0.5 < res.cost)) return verseResult(md, altsD, false, true);
   }
-  if (res) res.rhyme = rhymeOf(w2[w2.length - 1]);
+  if (res) {
+    const h2 = res.hemistichs[1];
+    const lastW = h2 && h2.words.length ? h2.words[h2.words.length - 1] : null;
+    res.rhymeInfo = lastW ? { ...rhymeInfo(lastW.display), word: lastW.text } : null;
+    res.rhyme = res.rhymeInfo ? res.rhymeInfo.rawi : rhymeOf(w2[w2.length - 1]);
+  }
   return res;
 }
 
 /* ----------------------------- القافية ----------------------------- */
 
 // الروي: آخر حرف صحيح في العجز بعد حذف حروف الإطلاق وهاء الوصل
-export function rhymeOf(word) {
-  if (!word) return null;
-  const T = parseWord(cleanText(word));
-  let L = T.map(t => t.l);
+function rawiIndex(T) {
+  const L = T.map(t => t.l);
   let i = L.length - 1;
   while (i > 0 && 'اوىي'.includes(L[i]) && !T[i].v && !T[i].sh) i--;   // ألف/واو/ياء الإطلاق
   if (i > 1 && L[i] === 'ه' && !T[i].su && !'اوي'.includes(L[i - 1])) {
     i--;                                                               // هاء الوصل: غدُهُ
     while (i > 0 && 'اوىي'.includes(L[i]) && !T[i].v && !T[i].sh && i === L.length - 2) i--;
   }
-  let r = L[i];
-  if ('أإآؤئء'.includes(r)) r = 'ء';
-  if (r === 'ة') r = 'ت';
-  if (r === 'ى') r = 'ا';
+  return i;
+}
+function normRawi(r) {
+  if ('أإآؤئء'.includes(r)) return 'ء';
+  if (r === 'ة') return 'ت';
+  if (r === 'ى') return 'ا';
   return r;
+}
+
+export function rhymeOf(word) {
+  if (!word) return null;
+  const T = parseWord(cleanText(word));
+  if (!T.length) return null;
+  return normRawi(T[rawiIndex(T)].l);
+}
+
+const HARAKA = { [FATHA]: 'الفتح', [DAMMA]: 'الضم', [KASRA]: 'الكسر' };
+const TN2H = { '\u064B': 'الفتح', '\u064C': 'الضم', '\u064D': 'الكسر' };
+
+// تفاصيل القافية لكلمة آخر البيت (مشكولة كما قرأها المحرك)
+export function rhymeInfo(word) {
+  if (!word) return null;
+  const T = parseWord(cleanText(word));
+  if (!T.length) return null;
+  const i = rawiIndex(T);
+  const t = T[i];
+  let haraka = t.su ? 'السكون' : t.v ? HARAKA[t.v] : t.tn ? TN2H[t.tn] : null;
+  if (!haraka && i < T.length - 1) haraka = { 'ا': 'الفتح', 'و': 'الضم', 'ي': 'الكسر', 'ى': 'الفتح' }[T[i + 1].l] || null;
+  if (!haraka && i === T.length - 1 && !t.marked) haraka = null;
+  const p = T[i - 1];
+  let ridf = null;
+  if (p && i >= 2 && !p.marked && !p.sh) {
+    if (p.l === 'ا') ridf = 'ا';
+    else if ((p.l === 'و' || p.l === 'ي') && (!T[i - 2].marked || T[i - 2].v === (p.l === 'و' ? DAMMA : KASRA))) ridf = 'وي';
+  }
+  return { rawi: normRawi(t.l), haraka, ridf, key: rhymeKey(keyOf(word)) };
+}
+
+function rhymeKey(k) {
+  let x = k.replace(/^(وال|فال|بال|كال|لل|ال)/, '');
+  if (x === k && /^[وف]/.test(k) && k.length >= 5) x = k.slice(1);
+  return x;
+}
+
+function majorityOf(arr) {
+  const c = new Map();
+  for (const x of arr) if (x != null) c.set(x, (c.get(x) || 0) + 1);
+  let best = null, n = 0;
+  for (const [k, v] of c) if (v > n) { best = k; n = v; }
+  return best;
+}
+
+// عيوب القافية بين أبيات القصيدة. infos: [{rawi, haraka, ridf, key, word}]
+export function checkRhymes(infos, want = {}) {
+  const issues = infos.map(() => []);
+  const ok = infos.filter(Boolean);
+  if (!ok.length) return { issues, rawi: null };
+  const rawi = want.rawi || majorityOf(ok.map(x => x.rawi));
+  const haraka = majorityOf(ok.map(x => x.haraka));
+  const ridfMaj = majorityOf(ok.map(x => x.ridf || 'none'));
+  const seen = new Map();
+  infos.forEach((x, i) => {
+    if (!x) return;
+    if (x.rawi !== rawi) issues[i].push({ kind: 'اختلاف الروي', msg: `رويّ هذا البيت «${x.rawi}» والقصيدة على «${rawi}»` });
+    else if (haraka && x.haraka && x.haraka !== haraka) {
+      const pair = [x.haraka, haraka];
+      const kind = pair.includes('السكون') ? 'اختلاف الإطلاق والتقييد' : pair.includes('الفتح') ? 'الإصراف' : 'الإقواء';
+      issues[i].push({ kind, msg: `حركة الروي هنا ${x.haraka} وفي القصيدة ${haraka}` });
+    }
+    const r = x.ridf || 'none';
+    if (infos.length > 1 && r !== ridfMaj && x.rawi === rawi) {
+      const name = v => v === 'none' ? 'بلا ردف' : v === 'ا' ? 'مردوفة بالألف' : 'مردوفة بالواو أو الياء';
+      issues[i].push({ kind: 'سناد الردف', msg: `القافية هنا ${name(r)} وفي القصيدة ${name(ridfMaj)}` });
+    }
+    if (x.key && seen.has(x.key)) issues[i].push({ kind: 'الإيطاء', msg: `تكررت كلمة القافية «${x.word || x.key}» من البيت ${seen.get(x.key) + 1}` });
+    else if (x.key) seen.set(x.key, i);
+  });
+  return { issues, rawi, haraka };
 }
 
 export function rhymeOfVerse(line) {

@@ -1,9 +1,11 @@
 // وزن — الواجهة
 import { METER_INFO } from './src/meters.js';
 import { splitVerse } from './src/engine.js';
-import { getSettings, saveSettings, hasKey, testKey, compose, suggestFix, MODELS, PURPOSES, AIError } from './src/ai.js';
+import { getSettings, saveSettings, hasKey, testKey, compose, suggestFix, MODELS, PURPOSES, AIError, AUTO_FIX_LIMIT } from './src/ai.js';
+import { checkRhymes } from './src/engine.js';
+import { verseProblems, sym } from './src/explain.js';
 
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -101,7 +103,7 @@ function renderHemi(h, label, opts = {}) {
   const half = opts.half || 0;
   const feet = h.feet.map((f, k) => {
     const bad = !f.ok;
-    const exp = bad && f.vp ? `<div class="exp">المطلوب: ${[...f.vp].map(b => b === '1' ? '/' : 'ه').join('')}</div>` : '';
+    const exp = bad && f.vp ? `<div class="exp">المطلوب: ${sym(f.vp)}</div>` : '';
     const sep = half && k === half ? '<div class="half-sep"></div>' : '';
     return `${sep}<div class="foot${bad ? ' bad' : ''}">
       <div class="ar">${esc(f.text) || '—'}</div>
@@ -110,26 +112,31 @@ function renderHemi(h, label, opts = {}) {
       ${f.note ? `<div class="note">${esc(f.note)}</div>` : ''}
     </div>`;
   }).join('');
-  // رسائل الكسر مع ترتيب التفعيلة
-  const errs = [];
-  const seen = new Set();
-  for (const e of h.errors) {
-    const k = e.foot + ':' + e.word + ':' + e.kind;
-    if (seen.has(k)) continue;
-    seen.add(k);
-    const f = h.feet[e.foot];
-    const fk = half ? (e.foot % half) : e.foot;
-    errs.push(`<li>${errText(e, h.words)} — في التفعيلة ${ORD[fk] || (fk + 1)}${f && f.name ? ` (${esc(f.name)})` : ''}</li>`);
-  }
   return `<div class="hemi">
     <div class="hemi-label">${label}</div>
     <div class="words">${words}</div>
     <div class="feet" style="--n:${half || h.feet.length}">${feet}</div>
-    ${errs.length ? `<ul class="errs">${errs.join('')}</ul>` : ''}
   </div>`;
 }
 
-function renderResult(r) {
+// المكان والوجه: من قواعد المحرك
+function problemsHTML(r) {
+  const items = [];
+  for (const p of verseProblems(r)) {
+    items.push(`<li><b>${esc(p.hemi)}، ${esc(p.where)}:</b> ${esc(p.what)}. <span class="can">${esc(p.can)}.</span></li>`);
+  }
+  for (const iss of r.rhymeIssues || []) {
+    items.push(`<li><b>القافية — ${esc(iss.kind)}:</b> ${esc(iss.msg)}.</li>`);
+  }
+  return items.length ? `<div class="probs"><div class="probs-h">موضع الخطأ ووجهه</div><ul class="errs">${items.join('')}</ul></div>` : '';
+}
+
+function needsFix(r) {
+  return r && !r.error && !r.empty && !r.single && !r.joined && r.input && r.input.parts &&
+    (!r.exact || (r.rhymeIssues && r.rhymeIssues.length));
+}
+
+function renderResult(r, opts = {}) {
   const node = $('#tpl-result').content.firstElementChild.cloneNode(true);
   if (r.error || r.empty) {
     node.querySelector('.meter').textContent = '—';
@@ -139,13 +146,16 @@ function renderResult(r) {
   node.querySelector('.meter').innerHTML = meterTitle(r);
   const badge = node.querySelector('.badge');
   const nBad = r.hemistichs.reduce((s, h) => s + h.feet.filter(f => !f.ok).length, 0);
-  if (r.exact) { badge.textContent = 'موزون ✓'; badge.classList.add('ok'); }
+  const nRh = (r.rhymeIssues || []).length;
+  if (r.exact && !nRh) { badge.textContent = 'موزون ✓'; badge.classList.add('ok'); }
+  else if (r.exact) { badge.textContent = 'موزون، وفي القافية عيب'; badge.classList.add('bad'); }
   else {
     badge.textContent = nBad === 1 ? 'مكسور في تفعيلة' : nBad === 2 ? 'مكسور في تفعيلتين' : `مكسور في ${nBad} تفعيلات`;
     badge.classList.add('bad');
   }
 
   const notes = [];
+  if (opts.label) notes.push(`<p>${esc(opts.label)}</p>`);
   if (r.autoSplit) notes.push('<p>قسّمتُ البيت إلى صدر وعجز تلقائياً.</p>');
   if (r.madwar) notes.push('<p>بيت مدوّر: كلمة مشتركة بين الشطرين.</p>');
   if (r.single && !r.autoSplit) notes.push('<p>شطر واحد. اكتب الشطر الآخر بعد * ليُوزن البيت كاملاً.</p>');
@@ -162,37 +172,42 @@ function renderResult(r) {
   } else {
     html = renderHemi(r.hemistichs[0], 'الصدر') + renderHemi(r.hemistichs[1], 'العجز');
   }
-  node.querySelector('.hemis').innerHTML = html;
+  node.querySelector('.hemis').innerHTML = html + problemsHTML(r);
 
   const close = (r.alternatives || []).filter(a => a.cost - r.cost < (r.exact ? 1.2 : 4)).slice(0, 2);
   if (close.length) {
     node.querySelector('.alts').innerHTML = 'يحتمل أيضاً: ' + close.map(a => meterTitle(a)).join('، ');
   }
-  if (!r.exact && !r.single && !r.joined && r.input && r.input.parts) {
-    const box = document.createElement('div');
-    box.className = 'card-actions';
-    box.innerHTML = `<button class="ghost small fix">اقترح تصحيحاً</button><span class="status"></span>`;
-    node.appendChild(box);
-    const out = document.createElement('div');
-    node.appendChild(out);
-    box.querySelector('.fix').addEventListener('click', () => runFix(r, box, out));
-  }
+  if (needsFix(r) && !opts.noFix) attachFix(node, r, opts.fix || {});
   return node;
 }
 
-async function runFix(r, box, out) {
+// التعديل المقترح: زر، ويُشغَّل تلقائياً لأول ثلاثة أبيات
+function attachFix(node, r, fx) {
+  const box = document.createElement('div');
+  box.className = 'card-actions';
+  box.innerHTML = `<button class="ghost small fix">اقترح تعديلاً</button><span class="status"></span>`;
+  const out = document.createElement('div');
+  node.appendChild(box);
+  node.appendChild(out);
+  const go = () => runFix(r, box, out, fx);
+  box.querySelector('.fix').addEventListener('click', go);
+  node._autoFix = go;
+}
+
+async function runFix(r, box, out, fx = {}) {
   const btn = box.querySelector('.fix'), st = box.querySelector('.status');
-  if (!hasKey()) { st.innerHTML = 'تحتاج مفتاح API. <button class="linkish" data-goto="about">أضفه</button>'; return; }
+  if (!hasKey()) { st.innerHTML = 'التعديل المقترح يحتاج مفتاح API. <button class="linkish" data-goto="about">أضفه</button>'; return; }
   btn.disabled = true;
   try {
-    const good = await suggestFix(r.input.text, r, analyze, msg => { st.textContent = msg; });
+    const good = await suggestFix(r, analyze, msg => { st.textContent = msg; }, { rhymeIssues: r.rhymeIssues, rawi: fx.rawi, haraka: fx.haraka });
     st.textContent = '';
-    if (!good.length) { out.innerHTML = '<p class="sugg why">ما استقامت الاقتراحات على الوزن هذه المرة. جرّب مرة ثانية.</p>'; return; }
-    out.innerHTML = good.map(g => `<div class="sugg">
+    if (!good.length) { out.innerHTML = '<p class="sugg why">ما سلمت الاقتراحات عند الفحص هذه المرة. اضغط «اقترح تعديلاً» لمحاولة أخرى.</p>'; return; }
+    btn.textContent = 'اقتراحات أخرى';
+    out.innerHTML = `<div class="sugg"><div class="probs-h">التعديل المقترح</div>` + good.map(g => `
       <div class="poem">${baytHTML(g.sadr, g.ajz)}</div>
       ${g.note ? `<div class="why">${esc(g.note)}</div>` : ''}
-      <span class="badge ok">موزون على ${meterTitle(g.result)} ✓</span>
-    </div>`).join('');
+      <span class="badge ok">سليم الوزن على ${meterTitle(g.result)}${fx.rawi ? ' والقافية' : ''} ✓</span>`).join('<hr class="soft">') + '</div>';
   } catch (e) {
     st.textContent = e instanceof AIError ? e.message : 'حدث خطأ: ' + e.message;
   } finally {
@@ -200,8 +215,28 @@ async function runFix(r, box, out) {
   }
 }
 
+async function runAutoFixes(nodes) {
+  if (!hasKey() || !getSettings().autoFix) return;
+  for (const n of nodes.filter(n => n._autoFix).slice(0, AUTO_FIX_LIMIT)) await n._autoFix();
+}
+
 function baytHTML(sadr, ajz, bad = false) {
   return `<div class="bayt${bad ? ' bad' : ''}"><span class="s1">${esc(sadr)}</span><span class="dot">✽</span><span class="s2">${esc(ajz)}</span></div>`;
+}
+
+// فحص القافية بين الأبيات
+function rhymeSummary(results) {
+  const full = results.filter(r => r && !r.error && !r.empty && !r.single && !r.joined && r.rhymeInfo);
+  if (full.length < 2) return null;
+  const chk = checkRhymes(results.map(r => (r && r.rhymeInfo && !r.single && !r.joined) ? r.rhymeInfo : null));
+  results.forEach((r, i) => { if (r) r.rhymeIssues = chk.issues[i]; });
+  const n = chk.issues.reduce((s, x) => s + x.length, 0);
+  const ridf = (() => { const m = full.map(r => r.rhymeInfo.ridf); const a = m.filter(x => x === 'ا').length, w = m.filter(x => x === 'وي').length; return a > full.length / 2 ? 'مردوفة بالألف' : w > full.length / 2 ? 'مردوفة بالواو والياء' : ''; })();
+  const div = document.createElement('div');
+  div.className = 'card rhyme-card';
+  div.innerHTML = `<div class="card-head"><div class="meter">القافية<small>الروي «${esc(chk.rawi || '؟')}»${chk.haraka ? '، ' + esc(chk.haraka) : ''}${ridf ? '، ' + ridf : ''}</small></div>
+    <span class="badge ${n ? 'bad' : 'ok'}">${n ? (n === 1 ? 'عيب واحد' : n + ' عيوب') : 'سليمة ✓'}</span></div>`;
+  return { node: div, rawi: chk.rawi, haraka: chk.haraka && chk.haraka !== 'السكون' ? chk.haraka : null };
 }
 
 /* ---------------- الأحداث ---------------- */
@@ -216,8 +251,12 @@ async function run() {
   try {
     const results = await analyze(items);
     out.innerHTML = '';
-    results.forEach(r => out.appendChild(renderResult(r)));
+    const rs = rhymeSummary(results);
+    if (rs) out.appendChild(rs.node);
+    const nodes = results.map((r, i) => renderResult(r, { label: results.length > 1 ? `البيت ${i + 1}` : '', fix: rs ? { rawi: rs.rawi, haraka: rs.haraka } : {} }));
+    nodes.forEach(n => out.appendChild(n));
     $('#status').textContent = '';
+    runAutoFixes(nodes);
     try { localStorage.setItem('wazn.last', text); } catch (e) {}
   } catch (e) {
     out.innerHTML = `<p class="err-box">تعذّر الوزن: ${esc(e.message)}</p>`;
@@ -289,9 +328,18 @@ function renderPoem(res, p) {
       <button class="ghost small copy">نسخ الأبيات</button>
       <button class="ghost small again">اكتب غيرها</button>
     </div>
+    <div class="broken-list"></div>
     <details class="more"><summary>التقطيع والتفعيلات</summary><div class="cuts"></div></details>`;
   const cuts = card.querySelector('.cuts');
-  res.verses.forEach(v => { if (v.result && !v.result.error && !v.result.empty) cuts.appendChild(renderResult(v.result)); });
+  const fixNodes = [];
+  res.verses.forEach((v, i) => {
+    if (!v.result || v.result.error || v.result.empty) return;
+    v.result.rhymeIssues = v.rhymeIssues || [];
+    const node = renderResult(v.result, { label: `البيت ${i + 1}`, fix: { rawi: res.rawi, haraka: res.haraka } });
+    if (!v.ok) { card.querySelector('.broken-list').appendChild(node); fixNodes.push(node); }
+    else cuts.appendChild(node);
+  });
+  if (fixNodes.length) runAutoFixes(fixNodes);
   card.querySelector('.copy').addEventListener('click', async (e) => {
     const text = res.verses.filter(v => v.ok).map(v => `${v.sadr}    ${v.ajz}`).join('\n');
     try { await navigator.clipboard.writeText(text); e.target.textContent = 'نُسخت ✓'; }
@@ -308,6 +356,7 @@ function loadSettingsUI() {
   $('#s-compose').innerHTML = opts; $('#s-fix').innerHTML = opts;
   $('#s-compose').value = s.composeModel; $('#s-fix').value = s.fixModel;
   $('#s-key').value = s.key;
+  $('#s-auto').checked = s.autoFix !== false;
 }
 loadSettingsUI();
 $('#s-show').addEventListener('click', () => {
@@ -315,7 +364,7 @@ $('#s-show').addEventListener('click', () => {
   $('#s-show').textContent = k.type === 'password' ? 'إظهار' : 'إخفاء';
 });
 $('#s-save').addEventListener('click', () => {
-  saveSettings({ key: $('#s-key').value.trim(), composeModel: $('#s-compose').value, fixModel: $('#s-fix').value });
+  saveSettings({ key: $('#s-key').value.trim(), composeModel: $('#s-compose').value, fixModel: $('#s-fix').value, autoFix: $('#s-auto').checked });
   $('#s-status').textContent = 'حُفظ ✓';
 });
 $('#s-del').addEventListener('click', () => {
