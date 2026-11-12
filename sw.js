@@ -1,5 +1,5 @@
 // وزن — يعمل بلا إنترنت. الكود يُجلب من الشبكة أولاً (لتصل التحديثات فوراً)، والقاموس من المخزن أولاً
-const CACHE = 'wazn-v1.2.3';
+const CACHE = 'wazn-v1.2.4';
 const FILES = [
   './', 'index.html', 'style.css', 'app.js', 'worker.js', 'manifest.webmanifest',
   'src/arabic.js', 'src/meters.js', 'src/engine.js', 'src/ai.js', 'src/explain.js', 'data/dict.tsv',

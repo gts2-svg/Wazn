@@ -58,7 +58,7 @@ let transport = async (body, key) => {
 // للاختبار فقط
 export function setTransport(fn) { transport = fn; }
 
-async function callClaude({ model, system, messages, maxTokens = 4000, tool = null }) {
+async function callClaude({ model, system, messages, maxTokens = 16000, tool = null }) {
   const { key } = getSettings();
   if (!key) throw new AIError('أضف مفتاح الـ API من الإعدادات أولاً.');
   const body = { model, max_tokens: maxTokens, system, messages };
@@ -211,7 +211,7 @@ export async function compose(p, check, onProgress = () => {}) {
   let round = 0;
 
   while (true) {
-    onProgress(round === 0 ? 'يكتب الأبيات…' : `يصلح ما انكسر (المحاولة ${round} من ${MAX_FIX_ROUNDS})…`);
+    onProgress(round === 0 ? 'يفكّر ويكتب الأبيات… (قد يأخذ دقيقة)' : `يصلح ما انكسر (المحاولة ${round} من ${MAX_FIX_ROUNDS})…`);
     const res = await callClaude({ model: composeModel, system: COMPOSE_SYSTEM, messages, tool: VERSES_TOOL });
     const data = payload(res);
     const vs = (data.verses || []).filter(v => v && v.sadr && v.ajz).map(v => ({ sadr: String(v.sadr).trim(), ajz: String(v.ajz).trim() }));
@@ -279,7 +279,7 @@ export async function suggestFix(r, check, onProgress = () => {}, opts = {}) {
   const good = [];
   for (let round = 0; round < 2 && good.length === 0; round++) {
     onProgress(round === 0 ? 'يقترح تعديلاً…' : 'يحاول مرة ثانية…');
-    const resp = await callClaude({ model: fixModel, system: FIX_SYSTEM, messages, maxTokens: 2500, tool: FIX_TOOL });
+    const resp = await callClaude({ model: fixModel, system: FIX_SYSTEM, messages, maxTokens: 10000, tool: FIX_TOOL });
     const data = payload(resp);
     const sugg = (data.suggestions || []).filter(s => s && s.sadr && s.ajz);
     if (!sugg.length) continue;
