@@ -62,7 +62,8 @@ async function callClaude({ model, system, messages, maxTokens = 4000, tool = nu
   const { key } = getSettings();
   if (!key) throw new AIError('أضف مفتاح الـ API من الإعدادات أولاً.');
   const body = { model, max_tokens: maxTokens, system, messages };
-  if (tool) { body.tools = [tool]; body.tool_choice = { type: 'tool', name: tool.name }; }
+  // بعض النماذج لا تقبل إلزام الأداة، فنتركها «auto» ونطلب استعمالها في التعليمات
+  if (tool) { body.tools = [tool]; body.tool_choice = { type: 'auto' }; }
   const data = await transport(body, key);
   const content = data.content || [];
   const text = content.filter(c => c.type === 'text').map(c => c.text).join('');
@@ -131,6 +132,7 @@ export async function testKey() {
 }
 
 function parseJSON(text) {
+  text = String(text || '').replace(/```(?:json)?/g, '');
   const a = text.indexOf('{'), b = text.lastIndexOf('}');
   if (a < 0 || b <= a) throw new AIError('جاء الرد بصيغة غير متوقعة. حاول مرة ثانية.');
   try { return JSON.parse(text.slice(a, b + 1)); }
@@ -178,7 +180,7 @@ const COMPOSE_SYSTEM = `أنت شاعر عربي فصيح متمكن من عرو
 - إن ذُكر اسم فاجعله في بيت واحد على الأقل إن استقام به الوزن.
 - وحّد حركة الروي في كل الأبيات، والتزم الردف إن بدأت به، ولا تكرر كلمة القافية.
 - إن كان الغرض هجاءً فاجعله هجاءً ظريفاً من باب الدعابة والممازحة بين الأصحاب: لا فحش، ولا قذف، ولا طعن في نسب أو قبيلة أو عرض أو دين أو لون، ولا اتهام بجرم، ولا تهديد.
-سلّم الأبيات عبر الأداة submit_verses: كل بيت صدر وعجز، مع اسم البحر وحرف الروي.`;
+سلّم الأبيات باستدعاء الأداة submit_verses دائماً (كل بيت صدر وعجز، مع اسم البحر وحرف الروي)، ولا تكتب الأبيات نصاً خارج الأداة.`;
 
 export const PURPOSES = ['مدح', 'تهنئة', 'رثاء', 'شكر', 'حكمة', 'غزل عفيف', 'هجاء'];
 
@@ -252,7 +254,7 @@ export async function compose(p, check, onProgress = () => {}) {
 const FIX_SYSTEM = `أنت عروضي وشاعر فصيح. يُعطى لك بيت فيه كسر في الوزن أو عيب في القافية، مع موضعه ووجهه كما حددهما ميزان آلي.
 اقترح ثلاث صيغ سليمة للبيت على البحر والقافية المطلوبين، بأقل تغيير ممكن يحفظ معنى الشاعر وألفاظه. وإن كان العيب في الوزن وحده فحافظ على كلمة القافية.
 شكّل كل حرف تشكيلاً كاملاً.
-سلّم الصيغ عبر الأداة submit_suggestions، ومع كل صيغة ملاحظة قصيرة بما غيّرته.`;
+سلّم الصيغ باستدعاء الأداة submit_suggestions دائماً، ومع كل صيغة ملاحظة قصيرة بما غيّرته، ولا تكتبها نصاً خارج الأداة.`;
 
 // opts: { rhymeIssues: [{kind,msg}], rawi, haraka }
 export async function suggestFix(r, check, onProgress = () => {}, opts = {}) {

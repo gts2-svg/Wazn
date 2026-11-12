@@ -5,7 +5,7 @@ import { getSettings, saveSettings, hasKey, testKey, compose, suggestFix, MODELS
 import { checkRhymes } from './src/engine.js';
 import { verseProblems, sym } from './src/explain.js';
 
-const VERSION = '1.2.2';
+const VERSION = '1.2.3';
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
