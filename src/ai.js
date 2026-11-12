@@ -44,13 +44,14 @@ let transport = async (body, key) => {
   if (!res.ok) {
     let msg = '';
     try { msg = (await res.json()).error.message; } catch (e) {}
-    if (res.status === 401) throw new AIError('المفتاح غير صحيح. راجعه في الإعدادات.');
-    if (res.status === 403) throw new AIError('المفتاح لا يملك صلاحية لهذا الطلب.');
-    if (res.status === 404) throw new AIError('النموذج المختار غير متاح لحسابك. غيّره من الإعدادات.');
-    if (res.status === 429) throw new AIError('بلغت حد الطلبات أو حد الصرف. انتظر قليلاً أو راجع حدود حسابك.');
-    if (res.status === 529 || res.status >= 500) throw new AIError('خدمة الذكاء الاصطناعي مشغولة الآن. حاول بعد قليل.');
-    if (/credit|balance/i.test(msg)) throw new AIError('رصيد الحساب لا يكفي.');
-    throw new AIError('رفض الطلب: ' + (msg || res.status));
+    const mk = (t) => { const er = new AIError(t); er.diag = `HTTP ${res.status}\n${msg}`; return er; };
+    if (res.status === 401) throw mk('المفتاح غير صحيح. راجعه في الإعدادات.');
+    if (res.status === 403) throw mk('المفتاح لا يملك صلاحية لهذا الطلب.');
+    if (res.status === 404) throw mk('النموذج المختار غير متاح لحسابك. غيّره من الإعدادات.');
+    if (res.status === 429) throw mk('بلغت حد الطلبات أو حد الصرف. انتظر قليلاً أو راجع حدود حسابك.');
+    if (res.status === 529 || res.status >= 500) throw mk('خدمة الذكاء الاصطناعي مشغولة الآن. حاول بعد قليل.');
+    if (/credit|balance/i.test(msg)) throw mk('رصيد الحساب لا يكفي.');
+    const e2 = new AIError('رفض الطلب: ' + (msg || res.status)); e2.diag = `HTTP ${res.status}\n${msg}`; throw e2;
   }
   return res.json();
 };
@@ -71,12 +72,18 @@ async function callClaude({ model, system, messages, maxTokens = 4000, tool = nu
 
 // يستخرج الكائن من الأداة، وإلا من النص
 function payload(res) {
-  if (res.input && typeof res.input === 'object') return res.input;
+  if (res.input && typeof res.input === 'object') {
+    if (typeof res.input.verses === 'string' || typeof res.input.suggestions === 'string') {
+      try { const k = res.input.verses ? 'verses' : 'suggestions'; res.input[k] = JSON.parse(res.input[k]); } catch (e) {}
+    }
+    return res.input;
+  }
   try { return parseJSON(res.text); }
   catch (e) {
-    const why = res.stop === 'max_tokens' ? 'انقطع الرد لطوله.' : res.stop === 'refusal' ? 'اعتذر النموذج عن الطلب.' : 'جاء الرد بصيغة غير متوقعة.';
-    const err = new AIError(why + ' حاول مرة ثانية.');
-    err.raw = (res.text || '').slice(0, 600);
+    const why = res.stop === 'max_tokens' ? 'انقطع الرد لطوله.' : res.stop === 'refusal' ? 'اعتذر النموذج عن الطلب.' : 'لم يصل الرد بالشكل المطلوب.';
+    const err = new AIError(why + ' افتح «تفاصيل الخطأ» وصوّرها.');
+    err.raw = (res.text || '').slice(0, 800);
+    err.diag = `stop: ${res.stop}\nblocks: ${(res.content || []).map(c => c.type).join(', ') || 'لا شيء'}`;
     throw err;
   }
 }
@@ -206,7 +213,7 @@ export async function compose(p, check, onProgress = () => {}) {
     const res = await callClaude({ model: composeModel, system: COMPOSE_SYSTEM, messages, tool: VERSES_TOOL });
     const data = payload(res);
     const vs = (data.verses || []).filter(v => v && v.sadr && v.ajz).map(v => ({ sadr: String(v.sadr).trim(), ajz: String(v.ajz).trim() }));
-    if (!vs.length) throw new AIError('لم تصل أبيات. حاول مرة ثانية.');
+    if (!vs.length) { const er = new AIError('لم تصل أبيات. افتح «تفاصيل الخطأ» وصوّرها.'); er.diag = `stop: ${res.stop}\ninput: ${JSON.stringify(res.input || {}).slice(0, 500)}`; er.raw = (res.text || '').slice(0, 500); throw er; }
     verses = vs;
 
     onProgress('يزن الأبيات…');

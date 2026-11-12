@@ -5,7 +5,7 @@ import { getSettings, saveSettings, hasKey, testKey, compose, suggestFix, MODELS
 import { checkRhymes } from './src/engine.js';
 import { verseProblems, sym } from './src/explain.js';
 
-const VERSION = '1.2.1';
+const VERSION = '1.2.2';
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -210,6 +210,7 @@ async function runFix(r, box, out, fx = {}) {
       <span class="badge ok">سليم الوزن على ${meterTitle(g.result)}${fx.rawi ? ' والقافية' : ''} ✓</span>`).join('<hr class="soft">') + '</div>';
   } catch (e) {
     st.textContent = e instanceof AIError ? e.message : 'حدث خطأ: ' + e.message;
+    out.innerHTML = `<details class="more"><summary>تفاصيل الخطأ</summary><pre class="raw">${esc(`النسخة: ${VERSION}\n${e.diag || ''}${e.raw ? '\nنص الرد:\n' + e.raw : ''}`)}</pre></details>`;
   } finally {
     btn.disabled = false;
   }
@@ -310,7 +311,7 @@ $('#write-form').addEventListener('submit', async (e) => {
   } catch (err) {
     st.textContent = '';
     out.innerHTML = `<p class="err-box">${esc(err instanceof AIError ? err.message : 'حدث خطأ: ' + err.message)}</p>` +
-      (err.raw ? `<details class="more"><summary>نص الرد</summary><pre class="raw">${esc(err.raw)}</pre></details>` : '');
+      `<details class="more"><summary>تفاصيل الخطأ</summary><pre class="raw">${esc(`النسخة: ${VERSION}\n${err.diag || ''}${err.raw ? '\nنص الرد:\n' + err.raw : ''}`)}</pre></details>`;
   } finally {
     $('#w-go').disabled = false;
   }
@@ -394,5 +395,15 @@ $('#ver-badge').textContent = 'النسخة ' + VERSION;
 try { const last = localStorage.getItem('wazn.last'); if (last) $('#verse').value = last; } catch (e) {}
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  // إذا نزل تحديث وتسلّم العاملُ الجديد الصفحةَ: نعيد التحميل مرة واحدة لتظهر النسخة الجديدة
+  let reloaded = false;
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloaded || !hadController) return;
+    reloaded = true;
+    location.reload();
+  });
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => reg.update()).catch(() => {});
+  });
 }
