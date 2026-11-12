@@ -1,8 +1,8 @@
 // وزن — يعمل بلا إنترنت بعد أول فتح
-const CACHE = 'wazn-v1.0.0';
+const CACHE = 'wazn-v1.1.0';
 const FILES = [
   './', 'index.html', 'style.css', 'app.js', 'worker.js', 'manifest.webmanifest',
-  'src/arabic.js', 'src/meters.js', 'src/engine.js', 'data/dict.tsv',
+  'src/arabic.js', 'src/meters.js', 'src/engine.js', 'src/ai.js', 'data/dict.tsv',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
 self.addEventListener('install', (e) => {

@@ -25,11 +25,13 @@
         <h1>وزن</h1>
         <p class="tag">ميزان الشعر العربي الفصيح</p>
       </div>
+      <span class="version" id="ver-badge" title="رقم النسخة"></span>
     </div>
     <nav class="tabs" role="tablist">
       <button role="tab" class="tab active" data-tab="weigh">زِن</button>
+      <button role="tab" class="tab" data-tab="write">اكتب لي</button>
       <button role="tab" class="tab" data-tab="meters">البحور</button>
-      <button role="tab" class="tab" data-tab="about">عن وزن</button>
+      <button role="tab" class="tab" data-tab="about">المزيد</button>
     </nav>
   </header>
 
@@ -48,12 +50,69 @@
       <div id="results" aria-live="polite"></div>
     </section>
 
+    <section id="tab-write" class="panel">
+      <div id="write-nokey" class="notice" hidden>هذه الميزة تحتاج مفتاح API. <button class="linkish" data-goto="about">أضفه من «المزيد»</button></div>
+      <form id="write-form" class="form" autocomplete="off">
+        <div class="row">
+          <label>الغرض
+            <select id="w-purpose"></select>
+          </label>
+          <label id="w-other-wrap" hidden>اكتب الغرض
+            <input id="w-other" type="text" placeholder="مثل: اعتذار، وصف، فخر">
+          </label>
+        </div>
+        <label>الاسم <span class="opt">(اختياري)</span>
+          <input id="w-name" type="text" placeholder="مثل: أبو محمد عبدالله">
+        </label>
+        <label>التفاصيل والصفات
+          <textarea id="w-details" rows="3" placeholder="مثل: كريم، يقف مع أصحابه، تخرج طبيباً هذا العام…"></textarea>
+        </label>
+        <div class="row">
+          <label>عدد الأبيات
+            <select id="w-count"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select>
+          </label>
+          <label>البحر
+            <select id="w-meter"><option value="">اختر أنت</option></select>
+          </label>
+          <label>الروي <span class="opt">(اختياري)</span>
+            <input id="w-rawi" type="text" maxlength="1" placeholder="ل">
+          </label>
+        </div>
+        <div class="actions">
+          <button id="w-go" class="primary" type="submit">اكتب</button>
+          <span id="w-status" class="status"></span>
+        </div>
+        <p class="hint">يكتب الذكاء الاصطناعي الأبيات، ثم يزنها «وزن» بيتاً بيتاً، ويعيد المكسور للإصلاح حتى ثلاث مرات. يحتاج إنترنت.</p>
+      </form>
+      <div id="write-results"></div>
+    </section>
+
     <section id="tab-meters" class="panel">
       <p class="lead">البحور الستة عشر بمفاتيحها (لصفي الدين الحلي) وتفعيلاتها. اضغط على أي بحر لتجرّب مفتاحه.</p>
       <div id="meters" class="meters"></div>
     </section>
 
     <section id="tab-about" class="panel">
+      <div class="prose settings">
+        <h2>الذكاء الاصطناعي</h2>
+        <p>للتأليف واقتراح التصحيح. ضع مفتاح الـ API من حسابك في console.anthropic.com. يُحفظ المفتاح على هذا الجهاز فقط، ويُرسل مباشرة إلى Anthropic.</p>
+        <label>مفتاح الـ API
+          <div class="keyrow">
+            <input id="s-key" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" dir="ltr">
+            <button id="s-show" class="ghost small" type="button">إظهار</button>
+          </div>
+        </label>
+        <div class="row">
+          <label>نموذج التأليف <select id="s-compose"></select></label>
+          <label>نموذج التصحيح <select id="s-fix"></select></label>
+        </div>
+        <div class="actions">
+          <button id="s-save" class="primary" type="button">حفظ</button>
+          <button id="s-test" class="ghost" type="button">جرّب المفتاح</button>
+          <button id="s-del" class="ghost" type="button">حذف المفتاح</button>
+          <span id="s-status" class="status"></span>
+        </div>
+      </div>
       <div class="prose">
         <h2>كيف يزن؟</h2>
         <p>يكتب «وزن» البيت كتابةً عروضية: ما يُنطق يُكتب وما لا يُنطق يُحذف؛ فالحرف المشدد حرفان، والتنوين نون ساكنة، وتسقط همزة الوصل في الدَّرج، وتُشبَع حركة آخر الشطر. ثم يحوّله إلى متحركات (/) وسواكن (ه)، ويطابقه على صور البحور الستة عشر بزحافاتها وعللها، فيعطيك البحر والتفعيلات، وإن كان في البيت كسر دلّك على موضعه وسببه.</p>
@@ -63,6 +122,8 @@
         <p id="accuracy">جُرّب على أبيات معروفة البحور لم يدخل شيء منها في القاموس، فأصاب البحر في <b>٩٣٪</b> منها (٨٣١٦ بيتاً). وأكثر ما يخطئ فيه البحور المتشابهة في أصلها، كالرجز والكامل المضمر، والسريع والرجز، والهزج ومجزوء الوافر؛ وهذه لا يحسم الأمرَ فيها إلا بقية أبيات القصيدة.</p>
         <h2>بلا إنترنت</h2>
         <p>بعد أول فتح يعمل «وزن» كاملاً بلا اتصال، ولا يُرسل شيئاً مما تكتب إلى أي مكان.</p>
+        <h2>الخصوصية</h2>
+        <p>الوزن كله يجري على جهازك. أما «اكتب لي» و«اقترح تصحيحاً» فيرسلان ما تكتبه فيهما إلى Anthropic عبر مفتاحك.</p>
         <p class="ver">الإصدار <span id="ver"></span></p>
       </div>
     </section>

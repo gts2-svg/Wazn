@@ -1,8 +1,9 @@
 // وزن — الواجهة
 import { METER_INFO } from './src/meters.js';
 import { splitVerse } from './src/engine.js';
+import { getSettings, saveSettings, hasKey, testKey, compose, suggestFix, MODELS, PURPOSES, AIError } from './src/ai.js';
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -167,7 +168,40 @@ function renderResult(r) {
   if (close.length) {
     node.querySelector('.alts').innerHTML = 'يحتمل أيضاً: ' + close.map(a => meterTitle(a)).join('، ');
   }
+  if (!r.exact && !r.single && !r.joined && r.input && r.input.parts) {
+    const box = document.createElement('div');
+    box.className = 'card-actions';
+    box.innerHTML = `<button class="ghost small fix">اقترح تصحيحاً</button><span class="status"></span>`;
+    node.appendChild(box);
+    const out = document.createElement('div');
+    node.appendChild(out);
+    box.querySelector('.fix').addEventListener('click', () => runFix(r, box, out));
+  }
   return node;
+}
+
+async function runFix(r, box, out) {
+  const btn = box.querySelector('.fix'), st = box.querySelector('.status');
+  if (!hasKey()) { st.innerHTML = 'تحتاج مفتاح API. <button class="linkish" data-goto="about">أضفه</button>'; return; }
+  btn.disabled = true;
+  try {
+    const good = await suggestFix(r.input.text, r, analyze, msg => { st.textContent = msg; });
+    st.textContent = '';
+    if (!good.length) { out.innerHTML = '<p class="sugg why">ما استقامت الاقتراحات على الوزن هذه المرة. جرّب مرة ثانية.</p>'; return; }
+    out.innerHTML = good.map(g => `<div class="sugg">
+      <div class="poem">${baytHTML(g.sadr, g.ajz)}</div>
+      ${g.note ? `<div class="why">${esc(g.note)}</div>` : ''}
+      <span class="badge ok">موزون على ${meterTitle(g.result)} ✓</span>
+    </div>`).join('');
+  } catch (e) {
+    st.textContent = e instanceof AIError ? e.message : 'حدث خطأ: ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function baytHTML(sadr, ajz, bad = false) {
+  return `<div class="bayt${bad ? ' bad' : ''}"><span class="s1">${esc(sadr)}</span><span class="dot">✽</span><span class="s2">${esc(ajz)}</span></div>`;
 }
 
 /* ---------------- الأحداث ---------------- */
@@ -204,10 +238,95 @@ $('#sample').addEventListener('click', () => {
 $('#clear').addEventListener('click', () => { $('#verse').value = ''; $('#results').innerHTML = ''; $('#verse').focus(); });
 
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => showTab(t.dataset.tab)));
+document.addEventListener('click', (e) => { const g = e.target.closest('[data-goto]'); if (g) { showTab(g.dataset.goto); if (g.dataset.goto === 'about') $('#s-key').focus(); } });
 function showTab(name) {
   document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab === name));
   document.querySelectorAll('.panel').forEach(x => x.classList.toggle('active', x.id === 'tab-' + name));
+  if (name === 'write') $('#write-nokey').hidden = hasKey();
 }
+
+/* ---------------- اكتب لي ---------------- */
+$('#w-purpose').innerHTML = [...PURPOSES, 'غرض آخر'].map(p => `<option>${p}</option>`).join('');
+$('#w-meter').innerHTML += Object.keys(METER_INFO).map(m => `<option value="${m}">${m}</option>`).join('');
+$('#w-purpose').addEventListener('change', () => { $('#w-other-wrap').hidden = $('#w-purpose').value !== 'غرض آخر'; });
+
+$('#write-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const st = $('#w-status'), out = $('#write-results');
+  if (!hasKey()) { $('#write-nokey').hidden = false; return; }
+  if (!isReady) { st.textContent = 'انتظر حتى يكتمل تحميل القاموس…'; return; }
+  let purpose = $('#w-purpose').value;
+  if (purpose === 'غرض آخر') purpose = $('#w-other').value.trim() || 'غرض عام';
+  const p = {
+    purpose, name: $('#w-name').value.trim(), details: $('#w-details').value.trim(),
+    count: +$('#w-count').value, meter: $('#w-meter').value || null, rawi: $('#w-rawi').value.trim() || null,
+  };
+  if (!p.name && !p.details && purpose !== 'حكمة') { st.textContent = 'اكتب الاسم أو بعض التفاصيل.'; return; }
+  $('#w-go').disabled = true;
+  out.innerHTML = '';
+  try {
+    const res = await compose(p, analyze, msg => { st.textContent = msg; });
+    st.textContent = '';
+    out.appendChild(renderPoem(res, p));
+  } catch (err) {
+    st.textContent = '';
+    out.innerHTML = `<p class="err-box">${esc(err instanceof AIError ? err.message : 'حدث خطأ: ' + err.message)}</p>`;
+  } finally {
+    $('#w-go').disabled = false;
+  }
+});
+
+function renderPoem(res, p) {
+  const card = document.createElement('article');
+  card.className = 'card';
+  const okN = res.verses.filter(v => v.ok).length, n = res.verses.length;
+  const badge = okN === n ? '<span class="badge ok">موزونة كلها ✓</span>' : `<span class="badge bad">${okN} من ${n} موزونة</span>`;
+  const meter = res.meter ? esc(res.meter) : '—';
+  card.innerHTML = `<header class="card-head"><div class="meter">${meter}<small>${res.rawi ? 'الروي: ' + esc(res.rawi) : ''}</small></div>${badge}</header>
+    <div class="poem">${res.verses.map(v => baytHTML(v.sadr, v.ajz, !v.ok)).join('')}</div>
+    <div class="poem-meta">${res.rounds ? `أُصلح بعد ${res.rounds === 1 ? 'محاولة واحدة' : res.rounds === 2 ? 'محاولتين' : res.rounds + ' محاولات'}.` : 'استقامت من أول مرة.'}${okN < n ? ' الأبيات بالأحمر ما استقام وزنها، ويمكنك أن تطلب غيرها.' : ''}</div>
+    <div class="card-actions">
+      <button class="ghost small copy">نسخ الأبيات</button>
+      <button class="ghost small again">اكتب غيرها</button>
+    </div>
+    <details class="more"><summary>التقطيع والتفعيلات</summary><div class="cuts"></div></details>`;
+  const cuts = card.querySelector('.cuts');
+  res.verses.forEach(v => { if (v.result && !v.result.error && !v.result.empty) cuts.appendChild(renderResult(v.result)); });
+  card.querySelector('.copy').addEventListener('click', async (e) => {
+    const text = res.verses.filter(v => v.ok).map(v => `${v.sadr}    ${v.ajz}`).join('\n');
+    try { await navigator.clipboard.writeText(text); e.target.textContent = 'نُسخت ✓'; }
+    catch (err) { e.target.textContent = 'تعذّر النسخ'; }
+  });
+  card.querySelector('.again').addEventListener('click', () => $('#write-form').requestSubmit());
+  return card;
+}
+
+/* ---------------- الإعدادات ---------------- */
+function loadSettingsUI() {
+  const s = getSettings();
+  const opts = MODELS.map(m => `<option value="${m.id}">${m.label}</option>`).join('');
+  $('#s-compose').innerHTML = opts; $('#s-fix').innerHTML = opts;
+  $('#s-compose').value = s.composeModel; $('#s-fix').value = s.fixModel;
+  $('#s-key').value = s.key;
+}
+loadSettingsUI();
+$('#s-show').addEventListener('click', () => {
+  const k = $('#s-key'); k.type = k.type === 'password' ? 'text' : 'password';
+  $('#s-show').textContent = k.type === 'password' ? 'إظهار' : 'إخفاء';
+});
+$('#s-save').addEventListener('click', () => {
+  saveSettings({ key: $('#s-key').value.trim(), composeModel: $('#s-compose').value, fixModel: $('#s-fix').value });
+  $('#s-status').textContent = 'حُفظ ✓';
+});
+$('#s-del').addEventListener('click', () => {
+  saveSettings({ key: '' }); $('#s-key').value = ''; $('#s-status').textContent = 'حُذف المفتاح';
+});
+$('#s-test').addEventListener('click', async () => {
+  saveSettings({ key: $('#s-key').value.trim(), composeModel: $('#s-compose').value, fixModel: $('#s-fix').value });
+  $('#s-status').textContent = 'يجرّب…';
+  try { await testKey(); $('#s-status').textContent = 'المفتاح يعمل ✓'; }
+  catch (e) { $('#s-status').textContent = e instanceof AIError ? e.message : e.message; }
+});
 
 // صفحة البحور
 $('#meters').innerHTML = Object.entries(METER_INFO).map(([m, i]) =>
@@ -221,6 +340,7 @@ $('#meters').addEventListener('click', (e) => {
 });
 
 $('#ver').textContent = VERSION;
+$('#ver-badge').textContent = 'النسخة ' + VERSION;
 try { const last = localStorage.getItem('wazn.last'); if (last) $('#verse').value = last; } catch (e) {}
 
 if ('serviceWorker' in navigator) {

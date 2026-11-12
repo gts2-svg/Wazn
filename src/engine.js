@@ -659,7 +659,16 @@ function isFragment(w) {
   return k.length <= 2 && !DICT.has(k) && !SPECIAL[k];
 }
 
+function formSet(meter) {
+  if (!meter) return null;
+  const set = new Set();
+  FORMS.forEach((F, i) => { if (F.meter === meter) set.add(i); });
+  return set.size ? set : null;
+}
+
+// opts.meter: يقيّد الوزن ببحر واحد (لفحص الأبيات المؤلَّفة على بحر مطلوب)
 export function analyzeVerse(line, opts = {}) {
+  const fs = formSet(opts.meter);
   const parts = Array.isArray(line) ? line : splitVerse(line);
   let w1 = hemiWords(parts[0] || '');
   const w2 = parts[1] ? hemiWords(parts[1]) : null;
@@ -668,17 +677,17 @@ export function analyzeVerse(line, opts = {}) {
   if (!w1.length) return null;
 
   if (!w2 || !w2.length) {
-    const m1 = matchHemistich(w1);
+    const m1 = matchHemistich(w1, { forms: fs });
     let alts = bestOf(m1);
     let best = alts[0];
     // بيت كامل بلا فاصل؟
     if (opts.autoSplit !== false && w1.length >= 5 && (!best || best.err > 0 || best.cost > w1.length * 0.9)) {
-      const md = matchHemistich(w1, { double: true });
+      const md = matchHemistich(w1, { double: true, forms: fs });
       const altsD = bestOf(md);
       if (altsD[0] && (!best || altsD[0].cost + 0.3 < best.cost)) {
         const split = splitFromPath(md, altsD[0].fi);
         if (split > 0 && split < w1.length) {
-          const r = analyzeVerse([w1.slice(0, split).join(' '), w1.slice(split).join(' ')], { autoSplit: false });
+          const r = analyzeVerse([w1.slice(0, split).join(' '), w1.slice(split).join(' ')], { autoSplit: false, meter: opts.meter });
           if (r && r.cost <= altsD[0].cost + 1.5) { r.autoSplit = true; return r; }
         }
         return verseResult(md, altsD, true);
@@ -691,8 +700,8 @@ export function analyzeVerse(line, opts = {}) {
     };
   }
 
-  const m1 = matchHemistich(w1);
-  const m2 = matchHemistich(w2);
+  const m1 = matchHemistich(w1, { forms: fs });
+  const m2 = matchHemistich(w2, { forms: fs });
   const scores = combine(m1, m2);
   let best = scores[0];
   let res = best ? {
@@ -702,11 +711,38 @@ export function analyzeVerse(line, opts = {}) {
   // المدوّر: كلمة مقسومة بين الشطرين
   if ((!res || !res.exact) && (isFragment(w1[w1.length - 1]) || isFragment(w2[0]))) {
     const joined = [...w1.slice(0, -1), w1[w1.length - 1] + w2[0], ...w2.slice(1)];
-    const md = matchHemistich(joined, { double: true });
+    const md = matchHemistich(joined, { double: true, forms: fs });
     const altsD = bestOf(md);
     if (altsD[0] && (!res || altsD[0].cost + 0.5 < res.cost)) return verseResult(md, altsD, false, true);
   }
+  if (res) res.rhyme = rhymeOf(w2[w2.length - 1]);
   return res;
+}
+
+/* ----------------------------- القافية ----------------------------- */
+
+// الروي: آخر حرف صحيح في العجز بعد حذف حروف الإطلاق وهاء الوصل
+export function rhymeOf(word) {
+  if (!word) return null;
+  const T = parseWord(cleanText(word));
+  let L = T.map(t => t.l);
+  let i = L.length - 1;
+  while (i > 0 && 'اوىي'.includes(L[i]) && !T[i].v && !T[i].sh) i--;   // ألف/واو/ياء الإطلاق
+  if (i > 1 && L[i] === 'ه' && !T[i].su && !'اوي'.includes(L[i - 1])) {
+    i--;                                                               // هاء الوصل: غدُهُ
+    while (i > 0 && 'اوىي'.includes(L[i]) && !T[i].v && !T[i].sh && i === L.length - 2) i--;
+  }
+  let r = L[i];
+  if ('أإآؤئء'.includes(r)) r = 'ء';
+  if (r === 'ة') r = 'ت';
+  if (r === 'ى') r = 'ا';
+  return r;
+}
+
+export function rhymeOfVerse(line) {
+  const parts = splitVerse(line);
+  const last = tokenize(parts[parts.length - 1] || '');
+  return rhymeOf(last[last.length - 1]);
 }
 
 function verseResult(md, alts, auto, madwar = false) {

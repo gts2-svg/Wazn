@@ -23,7 +23,7 @@ self.onmessage = async (ev) => {
       await load();
       const results = msg.items.map(it => {
         try {
-          const r = analyzeVerse(it.parts || it.text, { autoSplit: true });
+          const r = analyzeVerse(it.parts || it.text, { autoSplit: true, meter: it.meter || null });
           return r ? { ...r, input: it } : { input: it, empty: true };
         } catch (e) {
           return { input: it, error: String(e && e.message || e) };
