@@ -30,6 +30,7 @@
     <nav class="tabs" role="tablist">
       <button role="tab" class="tab active" data-tab="weigh">زِن</button>
       <button role="tab" class="tab" data-tab="write">اكتب لي</button>
+      <button role="tab" class="tab" data-tab="anth">المختارات</button>
       <button role="tab" class="tab" data-tab="meters">البحور</button>
       <button role="tab" class="tab" data-tab="about">المزيد</button>
     </nav>
@@ -87,6 +88,14 @@
       <div id="write-results"></div>
     </section>
 
+    <section id="tab-anth" class="panel">
+      <div id="anth-groups" class="chips"></div>
+      <input id="anth-q" class="search" type="search" placeholder="ابحث في الأبيات أو باسم الشاعر">
+      <p id="anth-intro" class="lead"></p>
+      <div id="anth-list"></div>
+      <button id="anth-more" class="ghost" hidden>عرض المزيد</button>
+    </section>
+
     <section id="tab-meters" class="panel">
       <p class="lead">البحور الستة عشر بمفاتيحها (لصفي الدين الحلي) وتفعيلاتها. اضغط على أي بحر لتجرّب مفتاحه.</p>
       <div id="meters" class="meters"></div>
@@ -123,6 +132,8 @@
         <p id="accuracy">جُرّب على أبيات معروفة البحور لم يدخل شيء منها في القاموس، فأصاب البحر في <b>٩٣٪</b> منها (٨٣١٦ بيتاً). وأكثر ما يخطئ فيه البحور المتشابهة في أصلها، كالرجز والكامل المضمر، والسريع والرجز، والهزج ومجزوء الوافر؛ وهذه لا يحسم الأمرَ فيها إلا بقية أبيات القصيدة.</p>
         <h2>بلا إنترنت</h2>
         <p>بعد أول فتح يعمل «وزن» كاملاً بلا اتصال، ولا يُرسل شيئاً مما تكتب إلى أي مكان.</p>
+        <h2>المختارات</h2>
+        <p>أبيات «المختارات» نصها وحركاتها من كتب تراث والشاملة أولاً، وما نقص من ضبطها أُكمل من دواوين ويكي مصدر، وكل بيت موزون آلياً، وما ظهر في ضبطه خطأ في المصدرين استُبعد. و«عيون المتنبي» اختيار الصاحب بن عباد في «الأمثال السائرة من شعر المتنبي»، وشرحها من شرح الواحدي.</p>
         <h2>الخصوصية</h2>
         <p>الوزن كله يجري على جهازك. أما «اكتب لي» و«اقترح تصحيحاً» فيرسلان ما تكتبه فيهما إلى Anthropic عبر مفتاحك.</p>
         <p class="ver">الإصدار <span id="ver"></span></p>

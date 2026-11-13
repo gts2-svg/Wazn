@@ -190,3 +190,18 @@ hr.soft { border: 0; border-top: 1px dashed var(--line); margin: 8px 0; }
 .broken-list { margin-top: 10px; }
 
 pre.raw { white-space: pre-wrap; font-size: 13px; background: var(--bg); padding: 8px; border-radius: 8px; }
+
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.chip { font: inherit; font-size: 15px; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.chip.active { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700; }
+@media (prefers-color-scheme: dark) { .chip.active { color: #0c1412; } }
+.chip small { opacity: .75; font-size: 12px; margin-inline-start: 4px; }
+input.search { width: 100%; font: inherit; font-size: 16px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; margin-bottom: 6px; }
+.verse-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 10px; }
+.verse-card .poem { margin: 2px 0 4px; }
+.verse-meta { font-size: 13.5px; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.verse-meta b { color: var(--accent); font-weight: 700; }
+.verse-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.sharh-box { margin-top: 8px; background: var(--bg); border-radius: 10px; padding: 8px 12px; font-size: 15px; line-height: 1.9; }
+.sharh-box .from { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+.sharh-box a, .verse-meta a { color: var(--accent); }

@@ -5,7 +5,7 @@ import { getSettings, saveSettings, hasKey, testKey, compose, suggestFix, MODELS
 import { checkRhymes } from './src/engine.js';
 import { verseProblems, sym } from './src/explain.js';
 
-const VERSION = '1.2.5';
+const VERSION = '1.3.0';
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -283,6 +283,7 @@ function showTab(name) {
   document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab === name));
   document.querySelectorAll('.panel').forEach(x => x.classList.toggle('active', x.id === 'tab-' + name));
   if (name === 'write') $('#write-nokey').hidden = hasKey();
+  if (name === 'anth') loadAnth();
 }
 
 /* ---------------- اكتب لي ---------------- */
@@ -350,6 +351,76 @@ function renderPoem(res, p) {
   card.querySelector('.again').addEventListener('click', () => $('#write-form').requestSubmit());
   return card;
 }
+
+/* ---------------- المختارات ---------------- */
+const ANTH = { items: [], group: 'الحكمة', q: '', shown: 0 };
+const INTRO = {
+  'عيون المتنبي': 'ما اختاره الصاحب بن عباد (ت ٣٨٥هـ) من أمثال المتنبي السائرة في كتابه «الأمثال السائرة من شعر المتنبي»، مرتبة من الأشهر في كتب التراث.',
+  'الحكمة': 'عيون الحكمة عند الفحول، ومعها أشهر أمثال المتنبي.',
+  'المدح': 'من أجود ما قيل في المدح.',
+  'الرثاء': 'من أجود ما قيل في الرثاء.',
+};
+async function loadAnth() {
+  if (ANTH.items.length) return;
+  try {
+    const r = await fetch('data/mukhtarat.json');
+    const d = await r.json();
+    ANTH.items = d.items;
+    const groups = d.meta.groups;
+    $('#anth-groups').innerHTML = groups.map(g => `<button class="chip${g === ANTH.group ? ' active' : ''}" data-g="${esc(g)}">${esc(g)}<small>${d.items.filter(i => i.g.includes(g)).length}</small></button>`).join('');
+    renderAnth(true);
+  } catch (e) {
+    $('#anth-list').innerHTML = '<p class="err-box">تعذّر تحميل المختارات.</p>';
+  }
+}
+function anthFiltered() {
+  const q = ANTH.q.replace(/[\u064B-\u0652\u0640]/g, '');
+  return ANTH.items.filter(i => i.g.includes(ANTH.group) && (!q ||
+    (i.sadr + ' ' + i.ajz + ' ' + i.poet).replace(/[\u064B-\u0652\u0640]/g, '').includes(q)));
+}
+function renderAnth(reset) {
+  const list = anthFiltered();
+  if (reset) { ANTH.shown = 0; $('#anth-list').innerHTML = ''; }
+  $('#anth-intro').textContent = INTRO[ANTH.group] || '';
+  const next = list.slice(ANTH.shown, ANTH.shown + 40);
+  ANTH.shown += next.length;
+  const frag = document.createElement('div');
+  frag.innerHTML = next.map((v, k) => `<article class="verse-card" data-i="${ANTH.items.indexOf(v)}">
+      <div class="poem">${baytHTML(v.sadr, v.ajz)}</div>
+      <div class="verse-meta"><b>${esc(v.poet)}</b><span>${esc(v.meter || '')}</span>${v.src ? `<a href="${esc(v.src.url)}" target="_blank" rel="noopener">المصدر</a>` : ''}</div>
+      <div class="verse-actions">
+        ${v.sharh ? '<button class="ghost small sh">الشرح</button>' : ''}
+        <button class="ghost small wz">زِنه</button>
+        <button class="ghost small cp">نسخ</button>
+      </div>
+    </article>`).join('');
+  while (frag.firstChild) $('#anth-list').appendChild(frag.firstChild);
+  if (!list.length) $('#anth-list').innerHTML = '<p class="lead">لا نتائج.</p>';
+  $('#anth-more').hidden = ANTH.shown >= list.length;
+}
+$('#anth-groups').addEventListener('click', (e) => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  ANTH.group = c.dataset.g;
+  document.querySelectorAll('#anth-groups .chip').forEach(x => x.classList.toggle('active', x === c));
+  renderAnth(true);
+});
+$('#anth-q').addEventListener('input', (e) => { ANTH.q = e.target.value.trim(); renderAnth(true); });
+$('#anth-more').addEventListener('click', () => renderAnth(false));
+$('#anth-list').addEventListener('click', async (e) => {
+  const card = e.target.closest('.verse-card'); if (!card) return;
+  const v = ANTH.items[+card.dataset.i];
+  if (e.target.classList.contains('sh')) {
+    let box = card.querySelector('.sharh-box');
+    if (box) { box.remove(); return; }
+    box = document.createElement('div'); box.className = 'sharh-box';
+    box.innerHTML = `${esc(v.sharh.text)}<div class="from">من <a href="${esc(v.sharh.url)}" target="_blank" rel="noopener">${esc(v.sharh.book)}</a></div>`;
+    card.appendChild(box);
+  } else if (e.target.classList.contains('wz')) {
+    $('#verse').value = v.sadr + ' * ' + v.ajz; showTab('weigh'); run();
+  } else if (e.target.classList.contains('cp')) {
+    try { await navigator.clipboard.writeText(v.sadr + '    ' + v.ajz + '\n— ' + v.poet); e.target.textContent = 'نُسخ ✓'; } catch (err) {}
+  }
+});
 
 /* ---------------- الإعدادات ---------------- */
 function loadSettingsUI() {
