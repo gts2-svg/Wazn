@@ -1,9 +1,9 @@
 // وزن — يعمل بلا إنترنت. الكود يُجلب من الشبكة أولاً (لتصل التحديثات فوراً)، والقاموس من المخزن أولاً
-const CACHE = 'wazn-v1.4.1';
+const CACHE = 'wazn-v1.5.0';
 const DIWANS = 'wazn-diwans';   // الدواوين تُخزَّن حين تُفتح، ولا تُحذف مع التحديثات
 const FILES = [
   './', 'index.html', 'style.css', 'app.js', 'worker.js', 'manifest.webmanifest',
-  'src/arabic.js', 'src/meters.js', 'src/engine.js', 'src/ai.js', 'src/explain.js', 'src/diwans.js', 'data/dict.tsv', 'data/mukhtarat.json',
+  'src/arabic.js', 'src/meters.js', 'src/engine.js', 'src/ai.js', 'src/explain.js', 'src/diwans.js', 'src/musajala.js', 'data/musajala.json', 'data/dict.tsv', 'data/mukhtarat.json',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
 self.addEventListener('install', (e) => {

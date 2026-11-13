@@ -242,5 +242,13 @@ export function initDiwans({ $, esc, baytHTML, weigh }) {
       try { await loadIndex(); renderHome(); }
       catch (e) { root.innerHTML = '<p class="err-box">تعذّر تحميل قائمة الدواوين. تحقق من الاتصال.</p>'; S.index = null; }
     },
+    // يفتح قصيدة من خارج التبويب (المساجلة مثلاً) ويبرز البيت
+    async openAt(id, i, k = -1) {
+      await loadIndex();
+      const d = await loadDiwan(id);
+      S.id = id; S.q = ''; S.meter = ''; S.sec = '';
+      openPoem(d, i, k);
+    },
+    loadIndex, loadDiwan,
   };
 }

@@ -5,8 +5,9 @@ import { getSettings, saveSettings, hasKey, testKey, compose, suggestFix, MODELS
 import { checkRhymes } from './src/engine.js';
 import { verseProblems, sym } from './src/explain.js';
 import { initDiwans } from './src/diwans.js';
+import { initMusajala } from './src/musajala.js';
 
-const VERSION = '1.4.1';
+const VERSION = '1.5.0';
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -286,6 +287,7 @@ function showTab(name) {
   if (name === 'write') $('#write-nokey').hidden = hasKey();
   if (name === 'anth') loadAnth();
   if (name === 'diwan') DIWANS.show();
+  if (name === 'saj') MUSAJALA.show();
 }
 
 /* ---------------- اكتب لي ---------------- */
@@ -426,7 +428,10 @@ $('#anth-list').addEventListener('click', async (e) => {
 });
 
 /* ---------------- الدواوين ---------------- */
-const DIWANS = initDiwans({ $, esc, baytHTML, weigh: (line) => { $('#verse').value = line; showTab('weigh'); window.scrollTo(0, 0); run(); } });
+const weighLine = (line) => { $('#verse').value = line; showTab('weigh'); window.scrollTo(0, 0); run(); };
+const DIWANS = initDiwans({ $, esc, baytHTML, weigh: weighLine });
+const MUSAJALA = initMusajala({ $, esc, baytHTML, weigh: weighLine, diwans: DIWANS,
+  openPoem: async (id, i, k) => { await DIWANS.openAt(id, i, k); showTab('diwan'); } });
 
 /* ---------------- الإعدادات ---------------- */
 function loadSettingsUI() {
