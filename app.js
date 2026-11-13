@@ -6,7 +6,7 @@ import { checkRhymes } from './src/engine.js';
 import { verseProblems, sym } from './src/explain.js';
 import { initDiwans } from './src/diwans.js';
 
-const VERSION = '1.4.0';
+const VERSION = '1.4.1';
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 

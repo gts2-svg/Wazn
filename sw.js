@@ -1,5 +1,5 @@
 // وزن — يعمل بلا إنترنت. الكود يُجلب من الشبكة أولاً (لتصل التحديثات فوراً)، والقاموس من المخزن أولاً
-const CACHE = 'wazn-v1.4.0';
+const CACHE = 'wazn-v1.4.1';
 const DIWANS = 'wazn-diwans';   // الدواوين تُخزَّن حين تُفتح، ولا تُحذف مع التحديثات
 const FILES = [
   './', 'index.html', 'style.css', 'app.js', 'worker.js', 'manifest.webmanifest',

@@ -58,13 +58,21 @@ let transport = async (body, key) => {
 // للاختبار فقط
 export function setTransport(fn) { transport = fn; }
 
-async function callClaude({ model, system, messages, maxTokens = 16000, tool = null }) {
+// أقصى حد للرد عند إعادة المحاولة
+const MAX_RETRY_TOKENS = 64000;
+async function callClaude({ model, system, messages, maxTokens = 32000, tool = null, onProgress = null }) {
   const { key } = getSettings();
   if (!key) throw new AIError('أضف مفتاح الـ API من الإعدادات أولاً.');
   const body = { model, max_tokens: maxTokens, system, messages };
   // بعض النماذج لا تقبل إلزام الأداة، فنتركها «auto» ونطلب استعمالها في التعليمات
   if (tool) { body.tools = [tool]; body.tool_choice = { type: 'auto' }; }
-  const data = await transport(body, key);
+  let data = await transport(body, key);
+  // إذا استنفد التفكيرُ الحدَّ قبل أن يكتب شيئاً، نعيد مرة واحدة بحد أعلى
+  const empty = (d) => d.stop_reason === 'max_tokens' && !(d.content || []).some(c => c.type === 'tool_use' || (c.type === 'text' && c.text.trim()));
+  if (empty(data) && maxTokens < MAX_RETRY_TOKENS) {
+    if (onProgress) onProgress('أطال التفكير، يعيد المحاولة بمساحة أكبر…');
+    try { data = await transport({ ...body, max_tokens: MAX_RETRY_TOKENS }, key); } catch (e) { /* تبقى النتيجة الأولى ويظهر سببها */ }
+  }
   const content = data.content || [];
   const text = content.filter(c => c.type === 'text').map(c => c.text).join('');
   const use = content.find(c => c.type === 'tool_use');
@@ -81,7 +89,7 @@ function payload(res) {
   }
   try { return parseJSON(res.text); }
   catch (e) {
-    const why = res.stop === 'max_tokens' ? 'انقطع الرد لطوله.' : res.stop === 'refusal' ? 'اعتذر النموذج عن الطلب.' : 'لم يصل الرد بالشكل المطلوب.';
+    const why = res.stop === 'max_tokens' ? 'انقطع الرد لطوله، حتى بعد إعادة المحاولة.' : res.stop === 'refusal' ? 'اعتذر النموذج عن الطلب.' : 'لم يصل الرد بالشكل المطلوب.';
     const err = new AIError(why + ' افتح «تفاصيل الخطأ» وصوّرها.');
     err.raw = (res.text || '').slice(0, 800);
     err.diag = `stop: ${res.stop}\nblocks: ${(res.content || []).map(c => c.type).join(', ') || 'لا شيء'}`;
@@ -214,7 +222,7 @@ export async function compose(p, check, onProgress = () => {}) {
 
   while (true) {
     onProgress(round === 0 ? 'يفكّر ويكتب الأبيات… (قد يأخذ دقيقة)' : `يصلح ما انكسر (المحاولة ${round} من ${MAX_FIX_ROUNDS})…`);
-    const res = await callClaude({ model: composeModel, system: COMPOSE_SYSTEM, messages, tool: VERSES_TOOL });
+    const res = await callClaude({ model: composeModel, system: COMPOSE_SYSTEM, messages, tool: VERSES_TOOL, onProgress });
     const data = payload(res);
     const vs = (data.verses || []).filter(v => v && v.sadr && v.ajz).map(v => ({ sadr: String(v.sadr).trim(), ajz: String(v.ajz).trim() }));
     if (!vs.length) { const er = new AIError('لم تصل أبيات. افتح «تفاصيل الخطأ» وصوّرها.'); er.diag = `stop: ${res.stop}\ninput: ${JSON.stringify(res.input || {}).slice(0, 500)}`; er.raw = (res.text || '').slice(0, 500); throw er; }
@@ -281,7 +289,7 @@ export async function suggestFix(r, check, onProgress = () => {}, opts = {}) {
   const good = [];
   for (let round = 0; round < 2 && good.length === 0; round++) {
     onProgress(round === 0 ? 'يقترح تعديلاً…' : 'يحاول مرة ثانية…');
-    const resp = await callClaude({ model: fixModel, system: FIX_SYSTEM, messages, maxTokens: 10000, tool: FIX_TOOL });
+    const resp = await callClaude({ model: fixModel, system: FIX_SYSTEM, messages, tool: FIX_TOOL, onProgress });
     const data = payload(resp);
     const sugg = (data.suggestions || []).filter(s => s && s.sadr && s.ajz);
     if (!sugg.length) continue;
