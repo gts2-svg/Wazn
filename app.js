@@ -4,8 +4,9 @@ import { splitVerse } from './src/engine.js';
 import { getSettings, saveSettings, hasKey, testKey, compose, suggestFix, MODELS, PURPOSES, AIError, AUTO_FIX_LIMIT } from './src/ai.js';
 import { checkRhymes } from './src/engine.js';
 import { verseProblems, sym } from './src/explain.js';
+import { initDiwans } from './src/diwans.js';
 
-const VERSION = '1.3.0';
+const VERSION = '1.4.0';
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -284,6 +285,7 @@ function showTab(name) {
   document.querySelectorAll('.panel').forEach(x => x.classList.toggle('active', x.id === 'tab-' + name));
   if (name === 'write') $('#write-nokey').hidden = hasKey();
   if (name === 'anth') loadAnth();
+  if (name === 'diwan') DIWANS.show();
 }
 
 /* ---------------- اكتب لي ---------------- */
@@ -359,6 +361,7 @@ const INTRO = {
   'الحكمة': 'عيون الحكمة عند الفحول، ومعها أشهر أمثال المتنبي.',
   'المدح': 'من أجود ما قيل في المدح.',
   'الرثاء': 'من أجود ما قيل في الرثاء.',
+  'الهجاء': 'من عيون الهجاء عند الفحول: نقائض جرير والفرزدق والأخطل، والحطيئة وحسان وابن الرومي والمتنبي. تُرك منه ما فيه فحش، أو طعن في عِرض، أو عصبية لِلَّون.',
 };
 async function loadAnth() {
   if (ANTH.items.length) return;
@@ -413,7 +416,7 @@ $('#anth-list').addEventListener('click', async (e) => {
     let box = card.querySelector('.sharh-box');
     if (box) { box.remove(); return; }
     box = document.createElement('div'); box.className = 'sharh-box';
-    box.innerHTML = `${esc(v.sharh.text)}<div class="from">من <a href="${esc(v.sharh.url)}" target="_blank" rel="noopener">${esc(v.sharh.book)}</a></div>`;
+    box.innerHTML = `${esc(v.sharh.text)}<div class="from">من ${v.sharh.url ? `<a href="${esc(v.sharh.url)}" target="_blank" rel="noopener">${esc(v.sharh.book)}</a>` : esc(v.sharh.book)}</div>`;
     card.appendChild(box);
   } else if (e.target.classList.contains('wz')) {
     $('#verse').value = v.sadr + ' * ' + v.ajz; showTab('weigh'); run();
@@ -421,6 +424,9 @@ $('#anth-list').addEventListener('click', async (e) => {
     try { await navigator.clipboard.writeText(v.sadr + '    ' + v.ajz + '\n— ' + v.poet); e.target.textContent = 'نُسخ ✓'; } catch (err) {}
   }
 });
+
+/* ---------------- الدواوين ---------------- */
+const DIWANS = initDiwans({ $, esc, baytHTML, weigh: (line) => { $('#verse').value = line; showTab('weigh'); window.scrollTo(0, 0); run(); } });
 
 /* ---------------- الإعدادات ---------------- */
 function loadSettingsUI() {

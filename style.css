@@ -205,3 +205,24 @@ input.search { width: 100%; font: inherit; font-size: 16px; color: var(--ink); b
 .sharh-box { margin-top: 8px; background: var(--bg); border-radius: 10px; padding: 8px 12px; font-size: 15px; line-height: 1.9; }
 .sharh-box .from { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
 .sharh-box a, .verse-meta a { color: var(--accent); }
+
+/* الدواوين */
+.dw-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+.dw-row input.search { flex: 1; min-width: 180px; margin: 0; }
+.dw-row select { font: inherit; font-size: 15px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; max-width: 48%; }
+.dw-era { font-size: 15px; color: var(--muted); margin: 18px 0 8px; font-weight: 600; }
+.dw-era small { font-weight: 400; }
+.dw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+@media (max-width: 480px) { .dw-grid { grid-template-columns: 1fr 1fr; } .dw-item b { font-size: 16px; } }
+.dw-item { text-align: start; font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.dw-item b { font-family: var(--verse); font-size: 18px; color: var(--accent); }
+.dw-item span { font-size: 13px; color: var(--muted); }
+.dw-weak { font-size: 12px; color: var(--warn); }
+.dw-bar { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.dw-title { font-family: var(--verse); font-size: 24px; margin: 4px 0; color: var(--accent); }
+.dw-poem { display: block; width: 100%; text-align: start; font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; cursor: pointer; }
+.dw-pt { display: block; font-weight: 600; font-size: 15px; }
+.dw-pf { display: block; font-family: var(--verse); font-size: 17px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dw-poem small { color: var(--muted); font-size: 12.5px; }
+.dw-n { min-width: 1.6em; color: var(--muted); }
+.verse-card.hl { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }

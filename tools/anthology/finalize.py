@@ -17,7 +17,7 @@ for i, v in enumerate(d):
     if sh: sh = dict(sh, text=clean_sharh(sh['text']))
     out.append({'g': v['g'], 'poet': v['poet'], 'sadr': v['sadr'], 'ajz': v['ajz'], 'meter': v['meter'],
                 'poem': v.get('poem'), 'src': v.get('src'), 'sharh': sh, 'fame': v.get('fame', 0)})
-meta = {'version': 1, 'built': '2026-11-13', 'groups': ['الحكمة', 'المدح', 'الرثاء', 'عيون المتنبي'],
+meta = {'version': 1, 'built': '2026-11-13', 'groups': ['الحكمة', 'المدح', 'الرثاء', 'الهجاء', 'عيون المتنبي'],
         'note': 'نص البيت وحركاته من كتب تراث والشاملة أولاً، ويُكمَّل الضبط الناقص من دواوين ويكي مصدر؛ وكل بيت موزون آلياً.'}
 json.dump({'meta': meta, 'items': out}, open('/home/claude/wazn/data/mukhtarat.json', 'w'), ensure_ascii=False, separators=(',', ':'))
 print('kept', len(out), 'dropped', len(dropped))
