@@ -17,6 +17,17 @@ struct ShellApp: App {
     }
 }
 
+/// سجلّ تشخيص صغير في Documents/shell.log (يقرؤه بناء المحاكي للتأكد أن الصفحة فُتحت)
+enum ShellLog {
+    static let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("shell.log")
+    static func write(_ line: String) {
+        NSLog("[shell] %@", line)
+        let data = Data((line + "\n").utf8)
+        if let h = try? FileHandle(forWritingTo: url) { h.seekToEndOfFile(); h.write(data); try? h.close() }
+        else { try? data.write(to: url) }
+    }
+}
+
 enum Shell {
     static let scheme = "app"
     static let home = URL(string: "app://localhost/index.html")!
@@ -41,6 +52,14 @@ final class WebController: UIViewController, WKNavigationDelegate, WKUIDelegate,
         config.mediaTypesRequiringUserActionForPlayback = []
         let content = config.userContentController
         content.add(self, name: "copy")
+        content.add(self, name: "log")
+        try? FileManager.default.removeItem(at: ShellLog.url)
+        ShellLog.write("start root=\(Shell.webRoot.path) exists=\(FileManager.default.fileExists(atPath: Shell.webRoot.appendingPathComponent("index.html").path))")
+        content.addUserScript(WKUserScript(source: """
+        window.addEventListener('error', function (e) { try { window.webkit.messageHandlers.log.postMessage('js error: ' + e.message + ' @' + e.filename + ':' + e.lineno); } catch (x) {} });
+        window.addEventListener('unhandledrejection', function (e) { try { window.webkit.messageHandlers.log.postMessage('js rejection: ' + (e.reason && (e.reason.message || e.reason))); } catch (x) {} });
+        window.addEventListener('load', function () { try { window.webkit.messageHandlers.log.postMessage('loaded: ' + document.title + ' text=' + (document.body ? document.body.innerText.length : -1)); } catch (x) {} });
+        """, injectionTime: .atDocumentStart, forMainFrameOnly: false))
         // النسخ: يمرّ عبر التطبيق نفسه حتى يعمل زر «نسخ» دائماً
         content.addUserScript(WKUserScript(source: """
         (function () {
@@ -75,6 +94,7 @@ final class WebController: UIViewController, WKNavigationDelegate, WKUIDelegate,
     // MARK: copy
     func userContentController(_ c: WKUserContentController, didReceive message: WKScriptMessage) {
         if message.name == "copy", let text = message.body as? String { UIPasteboard.general.string = text }
+        if message.name == "log" { ShellLog.write("\(message.body)") }
     }
 
     // MARK: links — روابط الإنترنت تُفتح في Safari
@@ -93,6 +113,14 @@ final class WebController: UIViewController, WKNavigationDelegate, WKUIDelegate,
         if let url = action.request.url { UIApplication.shared.open(url) }
         return nil
     }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        ShellLog.write("provisional fail: \(error)")
+    }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        ShellLog.write("fail: \(error)")
+    }
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { ShellLog.write("finish \(webView.url?.absoluteString ?? "")") }
 
     // إذا أوقف النظام محتوى الصفحة في الخلفية: نعيد تحميلها بدل الشاشة البيضاء
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { webView.reload() }
@@ -155,6 +183,7 @@ final class LocalFiles: NSObject, WKURLSchemeHandler {
             let data = inside ? try? Data(contentsOf: file, options: .mappedIfSafe) : nil
             DispatchQueue.main.async {
                 if self.stopped.remove(id) != nil { return }
+                ShellLog.write("\(data == nil ? 404 : 200) \(url.path)")
                 let type = Self.types[file.pathExtension.lowercased()] ?? "application/octet-stream"
                 let body = data ?? Data("not found".utf8)
                 let response = HTTPURLResponse(url: url, statusCode: data == nil ? 404 : 200, httpVersion: "HTTP/1.1",

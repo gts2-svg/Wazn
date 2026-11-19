@@ -68,6 +68,7 @@ jobs:
             PID=$(xcrun simctl launch "$U" com.gts2svg.wazn | awk '{print $NF}')
             sleep 25
             xcrun simctl io "$U" screenshot "$RUNNER_TEMP/shots/$1-launch.png" > /dev/null
+            echo "---- shell.log ($1)"; cat "$(xcrun simctl get_app_container "$U" com.gts2svg.wazn data)/Documents/shell.log" | head -60 || true
             if ! ps -p "$PID" > /dev/null 2>&1; then echo "::error::$1: the app quit"; echo "$1 crashed" >> "$RUNNER_TEMP/problems.txt"; fi
             xcrun simctl shutdown "$U" || true
           }
