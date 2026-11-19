@@ -1,0 +1,42 @@
+name: Wazn
+options:
+  developmentLanguage: ar
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    TARGETED_DEVICE_FAMILY: "1"
+targets:
+  Wazn:
+    type: application
+    platform: iOS
+    sources:
+      - path: Shell
+        excludes: ["Web/**"]
+      - path: Shell/Web
+        type: folder
+        buildPhase: resources
+    scheme: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gts2svg.wazn
+        PRODUCT_NAME: Wazn
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: Shell/Info.plist
+      properties:
+        CFBundleDisplayName: وزن
+        CFBundleDevelopmentRegion: ar
+        CFBundleLocalizations: [ar]
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIRequiresFullScreen: true
+        ShellForceDark: false
+        ITSAppUsesNonExemptEncryption: false

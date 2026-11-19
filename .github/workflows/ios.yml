@@ -1,0 +1,96 @@
+name: ios
+
+# يبني تطبيق الآيفون للمحاكي ويصوّر شاشته، ويرفع الصور إلى فرع ios-screens
+# للتأكد أن الموقع يعمل داخل التطبيق. لا ينشر شيئاً للتثبيت؛ الرفع إلى TestFlight من مستودع anthima.
+on:
+  push:
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios
+  cancel-in-progress: true
+
+jobs:
+  simulator:
+    runs-on: macos-15-intel
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: |
+          X=$(ls -d /Applications/Xcode_*.app | grep -v beta | sort -V | tail -1)
+          sudo xcode-select -s "$X"
+          xcodebuild -version
+
+      - name: Generate project
+        run: |
+          ios/build_web.sh
+          brew install xcodegen
+          cd ios && xcodegen generate
+
+      - name: Build for simulator
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project Wazn.xcodeproj -scheme Wazn -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build \
+            2>&1 | tee build.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build.log || { grep -B2 -A8 "error:" build.log | head -80; exit 1; }
+
+      - name: Screenshots
+        working-directory: ios
+        run: |
+          APP=$(find build/Build/Products -name "Wazn.app" -maxdepth 3 | head -1)
+          mkdir -p "$RUNNER_TEMP/shots"
+          pick() {
+            xcrun simctl list devices available -j | python3 -c "
+          import json,sys
+          want=sys.argv[1]
+          c=[x for k,v in json.load(sys.stdin)['devices'].items() if 'iOS' in k for x in v]
+          if want=='ipad':
+              m=[x for x in c if x['name']=='iPad (A16)'] or [x for x in c if x['name'].startswith('iPad') and 'Pro' not in x['name']] or [x for x in c if x['name'].startswith('iPad')]
+          else:
+              m=[x for x in c if x['name'].startswith('iPhone') and 'Pro' in x['name'] and 'Max' not in x['name']]
+          print(m[-1]['udid']+' '+m[-1]['name'])
+          " "$1"
+          }
+          shoot() {
+            read U N <<< "$(pick $1)"; echo "$1: $N"
+            xcrun simctl boot "$U"; xcrun simctl bootstatus "$U" -b
+            xcrun simctl status_bar "$U" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3
+            xcrun simctl install "$U" "$APP"
+            PID=$(xcrun simctl launch "$U" com.gts2svg.wazn | awk '{print $NF}')
+            sleep 25
+            xcrun simctl io "$U" screenshot "$RUNNER_TEMP/shots/$1-launch.png" > /dev/null
+            if ! ps -p "$PID" > /dev/null 2>&1; then echo "::error::$1: the app quit"; echo "$1 crashed" >> "$RUNNER_TEMP/problems.txt"; fi
+            xcrun simctl shutdown "$U" || true
+          }
+          : > "$RUNNER_TEMP/problems.txt"
+          shoot iphone
+
+          ls -la "$RUNNER_TEMP/shots"
+
+      - name: Publish screenshots to the ios-screens branch
+        if: always()
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          ls "$RUNNER_TEMP"/shots/*.png > /dev/null 2>&1 || exit 0
+          mkdir -p "$RUNNER_TEMP/screens" && cd "$RUNNER_TEMP/screens"
+          git init -q -b ios-screens
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          cp "$RUNNER_TEMP"/shots/*.png .
+          git add *.png
+          git commit -q -m "ios screenshots for ${GITHUB_SHA::7}"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ios-screens
+
+      - name: Check the app stayed open
+        run: |
+          if [ -s "$RUNNER_TEMP/problems.txt" ]; then cat "$RUNNER_TEMP/problems.txt"; exit 1; fi
