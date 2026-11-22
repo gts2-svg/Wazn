@@ -6,17 +6,24 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.0"
+    MARKETING_VERSION: "2.0.0"
     CURRENT_PROJECT_VERSION: "1"
-    TARGETED_DEVICE_FAMILY: "1"
+    TARGETED_DEVICE_FAMILY: "1,2"
 targets:
   Wazn:
     type: application
     platform: iOS
     sources:
-      - path: Shell
-        excludes: ["Web/**"]
-      - path: Shell/Web
+      - path: App
+        excludes: ["Data/**", "Fonts/**", "JS/**"]
+      # الشعر والقاموس (ينسخها build_web.sh من data/)، ونواة المحرك، والخطوط: مجلدات كما هي داخل التطبيق
+      - path: App/Data
+        type: folder
+        buildPhase: resources
+      - path: App/JS
+        type: folder
+        buildPhase: resources
+      - path: App/Fonts
         type: folder
         buildPhase: resources
     scheme: {}
@@ -24,10 +31,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.gts2svg.wazn
         PRODUCT_NAME: Wazn
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     info:
-      path: Shell/Info.plist
+      path: App/Info.plist
       properties:
         CFBundleDisplayName: وزن
         CFBundleDevelopmentRegion: ar
@@ -37,6 +44,9 @@ targets:
         UILaunchScreen:
           UIColorName: LaunchBackground
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
-        UIRequiresFullScreen: true
-        ShellForceDark: false
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         ITSAppUsesNonExemptEncryption: false

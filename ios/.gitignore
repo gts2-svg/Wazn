@@ -1,4 +1,4 @@
-Shell/Web/
+App/Data/
 *.xcodeproj/
-Shell/Info.plist
+App/Info.plist
 build/
