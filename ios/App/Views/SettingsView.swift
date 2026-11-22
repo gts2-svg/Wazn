@@ -18,22 +18,22 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    HStack {
-                        Group {
-                            if show { TextField("sk-ant-…", text: $key) } else { SecureField("sk-ant-…", text: $key) }
-                        }
-                        .font(.body.monospaced())
-                        .environment(\.layoutDirection, .leftToRight)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        Button(show ? "إخفاء" : "إظهار") { show.toggle() }.font(.footnote).buttonStyle(.borderless)
+                    Group {
+                        if show { TextField("sk-ant-…", text: $key) } else { SecureField("sk-ant-…", text: $key) }
                     }
+                    .font(.body.monospaced())
+                    .multilineTextAlignment(.leading)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    Toggle("إظهار المفتاح", isOn: $show)
                     Picker("نموذج التأليف", selection: $composeModel) {
                         ForEach(models, id: \.id) { Text($0.label).tag($0.id) }
                     }
+                    .pickerStyle(.menu)
                     Picker("نموذج التصحيح", selection: $fixModel) {
                         ForEach(models, id: \.id) { Text($0.label).tag($0.id) }
                     }
+                    .pickerStyle(.menu)
                     Toggle("اقترح التعديل تلقائياً لأول ثلاثة أبيات مكسورة", isOn: $autoFix)
                     HStack(spacing: 12) {
                         Button("حفظ") { Task { await save(); status = "حُفظ ✓" } }.buttonStyle(.borderedProminent)

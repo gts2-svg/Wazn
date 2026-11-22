@@ -127,7 +127,7 @@ struct MusajalaView: View {
                 if v.fromAnthology { Text("من المختارات") }
                 if !end.isEmpty {
                     Button { letter = end; said = nil; pick() } label: {
-                        Text("يختم بـ\(end == "ا" ? "الهمزة" : "«\(end)»")")
+                        Text("يختم ب\(Self.names[end] ?? end)")
                             .font(.footnote.weight(.semibold))
                             .padding(.horizontal, 8).padding(.vertical, 3)
                             .foregroundStyle(C.accent)

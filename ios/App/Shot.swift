@@ -60,7 +60,7 @@ enum Shot {
         ("إذا غامرتَ في شرفٍ مرومِ * فلا تقنعْ بما دونَ النجومِ", "الوافر"),
         ("وإذا أتتكَ مذمّتي من ناقصٍ * فهي الشهادةُ لي بأنّي كاملُ", "الكامل"),
         ("ليسَ الغريبُ غريبَ الشامِ واليمنِ * إنّ الغريبَ غريبُ اللحدِ والكفنِ", "البسيط"),
-        ("صاحِ هذي قبورُنا تملأُ الرحبَ * فأينَ القبورُ من عهدِ عادِ", "الخفيف"),
+        ("وللهِ في كلِّ تحريكةٍ * وتسكينةٍ أبداً شاهدُ", "المتقارب"),
     ]
 
     @MainActor static func runSelfCheck() async {
@@ -94,6 +94,10 @@ enum Shot {
             ok = false
             lines.append("data FAIL: \(error)")
         }
+        let models = await WaznCore.shared.models()
+        let st = try? await WaznCore.shared.settings()
+        lines.append("models=\(models.map(\.id)) settings=\(st.map { "\($0.composeModel)/\($0.fixModel)/\($0.autoFix)" } ?? "nil")")
+        if models.count != 2 || st == nil { ok = false }
         let last = await WaznCore.shared.lastLetter("بسقط اللوى بين الدخول فحوملِ")
         lines.append("lastLetter=\(last)")
         if last != "ل" { ok = false }
