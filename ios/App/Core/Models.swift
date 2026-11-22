@@ -14,7 +14,7 @@ struct RhymeUI: Decodable {
     let haraka: String
 }
 
-struct ResultUI: Decodable, Identifiable {
+struct ResultUI: Codable, Identifiable {
     let id: Int
     let failed: Bool
     let label: String
@@ -36,20 +36,20 @@ struct ResultUI: Decodable, Identifiable {
     var key: String { "\(id)-\(label)-\(title)" }
 }
 
-struct HemiUI: Decodable {
+struct HemiUI: Codable {
     let label: String
     let half: Double
     let words: [WordUI]
     let feet: [FootUI]
 }
 
-struct WordUI: Decodable {
+struct WordUI: Codable {
     let t: String
     let guess: Bool
     let broken: Bool
 }
 
-struct FootUI: Decodable {
+struct FootUI: Codable {
     let text: String
     let sym: String
     let name: String
@@ -58,18 +58,18 @@ struct FootUI: Decodable {
     let note: String
 }
 
-struct ProblemUI: Decodable {
+struct ProblemUI: Codable {
     let head: String
     let what: String
     let can: String
 }
 
-struct RhymeIssueUI: Decodable {
+struct RhymeIssueUI: Codable {
     let kind: String
     let msg: String
 }
 
-struct ComposeParams: Encodable {
+struct ComposeParams: Codable {
     var purpose: String
     var name: String
     var details: String
@@ -78,7 +78,7 @@ struct ComposeParams: Encodable {
     var rawi: String?
 }
 
-struct ComposeOutput: Decodable {
+struct ComposeOutput: Codable {
     let meter: String
     let rawi: String
     let haraka: String
@@ -86,7 +86,7 @@ struct ComposeOutput: Decodable {
     let verses: [ComposedVerse]
 }
 
-struct ComposedVerse: Decodable {
+struct ComposedVerse: Codable {
     let sadr: String
     let ajz: String
     let ok: Bool

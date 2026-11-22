@@ -52,7 +52,7 @@ final class WaznCore: @unchecked Sendable {
         let c = URLSessionConfiguration.default
         c.timeoutIntervalForRequest = 600
         c.timeoutIntervalForResource = 900
-        c.waitsForConnectivity = false
+        c.waitsForConnectivity = true   // إن انقطع النت قبل الطلب ينتظر عودته بدل أن يفشل
         return URLSession(configuration: c)
     }()
 
@@ -118,7 +118,7 @@ final class WaznCore: @unchecked Sendable {
     }
 
     /// طلب Anthropic من التطبيق نفسه؛ النتيجة تعود إلى JavaScript على طابور المحرك
-    private func post(body: String, key: String, done: JSValue) {
+    private func post(body: String, key: String, done: JSValue, attempt: Int = 0) {
         guard let url = URL(string: "https://api.anthropic.com/v1/messages") else { return }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -131,6 +131,14 @@ final class WaznCore: @unchecked Sendable {
             let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
             let text = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
             let netError = err != nil && resp == nil
+            // انقطع الاتصال في أثناء الطلب: يعيده كل خمس ثوانٍ حتى يعود النت (إلى خمس دقائق)
+            if netError, attempt < 60, let code = (err as? URLError)?.code,
+               [.networkConnectionLost, .notConnectedToInternet, .timedOut, .cannotConnectToHost, .dnsLookupFailed, .cannotFindHost].contains(code) {
+                self?.queue.asyncAfter(deadline: .now() + 5) {
+                    self?.post(body: body, key: key, done: done, attempt: attempt + 1)
+                }
+                return
+            }
             self?.queue.async {
                 done.call(withArguments: [status, text, netError])
             }

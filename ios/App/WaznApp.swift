@@ -65,8 +65,8 @@ struct RootView: View {
             WeighView()
                 .tabItem { Label("زِن", systemImage: "scalemass") }
                 .tag(AppTab.weigh)
-            WriteView()
-                .tabItem { Label("اكتب لي", systemImage: "pencil.and.outline") }
+            ComposeView()
+                .tabItem { Label("انظم", systemImage: "pencil.line") }
                 .tag(AppTab.write)
             AnthologyView()
                 .tabItem { Label("المختارات", systemImage: "star") }
@@ -108,11 +108,15 @@ enum KeyboardDismisser {
     }
     static let delegate = Delegate()
     static var installed = false
-    static func install() {
+    static func install(attempt: Int = 0) {
         if installed { return }
         Task { @MainActor in
             let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap { $0.windows }
-            guard let w = windows.first(where: { $0.isKeyWindow }) ?? windows.first else { return }
+            guard let w = windows.first(where: { $0.isKeyWindow }) ?? windows.first else {
+                // النافذة لم تُنشأ بعد: أعد المحاولة بعد لحظة
+                if attempt < 20 { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { install(attempt: attempt + 1) } }
+                return
+            }
             let t = UITapGestureRecognizer(target: delegate, action: #selector(Delegate.tapped(_:)))
             t.cancelsTouchesInView = false
             t.delegate = delegate

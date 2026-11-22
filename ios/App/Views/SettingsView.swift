@@ -75,6 +75,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            .keyboardDone()
             .navigationTitle("الإعدادات")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

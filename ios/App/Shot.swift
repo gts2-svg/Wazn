@@ -31,6 +31,9 @@ enum Shot {
             case "poem3":
                 app.weigh("لقد ضاع منا الصبر والحلم كله * وبات الفؤاد يذوب من غيره\nقفا نبك من ذكرى حبيب ومنزل * بسقط اللوى بين الدخول فحومل")
             case "write": app.tab = .write
+            case "write-done":
+                app.tab = .write
+                await ComposeRunner.shared.demo()
             case "anthology": app.tab = .anthology
             case "diwans": app.tab = .diwans
             case "poem": app.openPoem(diwan: "mutanabbi", poem: 0, verse: 2)
@@ -40,7 +43,7 @@ enum Shot {
             case "settings": app.showSettings = true
             default: break
             }
-            let wait: Double = ["weigh": 4, "broken": 4, "poem3": 5, "poem": 5, "diwans": 3, "musajala": 4][n] ?? 3
+            let wait: Double = ["write-done": 5, "weigh": 4, "broken": 4, "poem3": 5, "poem": 5, "diwans": 3, "musajala": 4][n] ?? 3
             try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
             try? "ready \(n)".write(to: docs.appendingPathComponent("shot-ready.txt"), atomically: true, encoding: .utf8)
         }

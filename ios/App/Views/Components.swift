@@ -24,6 +24,7 @@ private struct SettingsButton: ViewModifier {
                     .accessibilityLabel("الإعدادات")
             }
         }
+        .keyboardDone()
     }
 }
 
@@ -279,4 +280,22 @@ struct ErrorBox: View {
             .background(C.badSoft)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
+}
+
+/// زر «تم» فوق لوحة المفاتيح لإغلاقها
+private struct KeyboardDone: ViewModifier {
+    func body(content: Content) -> some View {
+        content.toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("تم") {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
+                .fontWeight(.semibold)
+            }
+        }
+    }
+}
+extension View {
+    func keyboardDone() -> some View { modifier(KeyboardDone()) }
 }

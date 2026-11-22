@@ -21,7 +21,7 @@ jobs:
     runs-on: macos-15-intel
     timeout-minutes: 75
     env:
-      SHOTS: "weigh broken poem3 write anthology diwans poem musajala settings"
+      SHOTS: "write write-done weigh broken poem3 anthology diwans poem musajala settings"
     steps:
       - uses: actions/checkout@v4
 
@@ -97,7 +97,7 @@ jobs:
             xcrun simctl shutdown "$U" || true
           }
           shoot iphone
-          SHOTS="weigh diwans" shoot ipad
+          SHOTS="write-done weigh" shoot ipad
           ls -la "$SH"
           ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -i wazn | head || true
           for f in $(ls ~/Library/Logs/DiagnosticReports/Wazn* 2>/dev/null | head -2); do head -150 "$f" >> "$SH/crash.txt"; done
