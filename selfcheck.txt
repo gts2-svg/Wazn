@@ -1,0 +1,11 @@
+core ready=yes dict=172827 in 0.0s
+OK الطويل (want الطويل) 2.05s
+OK البسيط (want البسيط) 0.54s
+OK الوافر (want الوافر) 0.05s
+OK الكامل (want الكامل) 0.39s
+OK البسيط (want البسيط) 0.30s
+OK المتقارب (want المتقارب) 0.20s
+data: anthology=409 diwans=41 saj=9631 mutanabbi poems=288
+models=["claude-opus-5-5", "claude-sonnet-5-5"] settings=claude-opus-5-5/claude-sonnet-5-5/true
+lastLetter=ل
+SELFCHECK OK

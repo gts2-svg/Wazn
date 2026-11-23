@@ -1,0 +1,32 @@
+== errors
+== warnings in App
+    cd /Users/runner/work/Wazn/Wazn/ios
+    /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --module-name Wazn --sdk-root /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk --xcode-version 17C529 --platform-family iOS --deployment-target 16.0 --bundle-identifier com.gts2svg.wazn --output /Users/runner/work/Wazn/Wazn/ios/build/Build/Products/Debug-iphonesimulator/Wazn.app --target-triple arm64-apple-ios16.0-simulator --target-triple x86_64-apple-ios16.0-simulator --binary-file /Users/runner/work/Wazn/Wazn/ios/build/Build/Products/Debug-iphonesimulator/Wazn.app/Wazn --dependency-file /Users/runner/work/Wazn/Wazn/ios/build/Build/Intermediates.noindex/Wazn.build/Debug-iphonesimulator/Wazn.build/Objects-normal/arm64/Wazn_dependency_info.dat --dependency-file /Users/runner/work/Wazn/Wazn/ios/build/Build/Intermediates.noindex/Wazn.build/Debug-iphonesimulator/Wazn.build/Objects-normal/x86_64/Wazn_dependency_info.dat --stringsdata-file /Users/runner/work/Wazn/Wazn/ios/build/Build/Intermediates.noindex/Wazn.build/Debug-iphonesimulator/Wazn.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --stringsdata-file /Users/runner/work/Wazn/Wazn/ios/build/Build/Intermediates.noindex/Wazn.build/Debug-iphonesimulator/Wazn.build/Objects-normal/x86_64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/runner/work/Wazn/Wazn/ios/build/Build/Intermediates.noindex/Wazn.build/Debug-iphonesimulator/Wazn.build/Objects-normal/arm64/Wazn.SwiftFileList --source-file-list /Users/runner/work/Wazn/Wazn/ios/build/Build/Intermediates.noindex/Wazn.build/Debug-iphonesimulator/Wazn.build/Objects-normal/x86_64/Wazn.SwiftFileList --metadata-file-list /Users/runner/work/Wazn/Wazn/ios/build/Build/Intermediates.noindex/Wazn.build/Debug-iphonesimulator/Wazn.build/Wazn.DependencyMetadataFileList --static-metadata-file-list /Users/runner/work/Wazn/Wazn/ios/build/Build/Intermediates.noindex/Wazn.build/Debug-iphonesimulator/Wazn.build/Wazn.DependencyStaticMetadataFileList --swift-const-vals-list /Users/runner/work/Wazn/Wazn/ios/build/Build/Intermediates.noindex/Wazn.build/Debug-iphonesimulator/Wazn.build/Objects-normal/arm64/Wazn.SwiftConstValuesFileList --swift-const-vals-list /Users/runner/work/Wazn/Wazn/ios/build/Build/Intermediates.noindex/Wazn.build/Debug-iphonesimulator/Wazn.build/Objects-normal/x86_64/Wazn.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --validate-assistant-intents --no-app-shortcuts-localization
+2026-11-23 17:35:00.264 appintentsmetadataprocessor[5736:19886] Starting appintentsmetadataprocessor export
+2026-11-23 17:35:00.273 appintentsmetadataprocessor[5736:19886] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+
+CopySwiftLibs /Users/runner/work/Wazn/Wazn/ios/build/Build/Products/Debug-iphonesimulator/Wazn.app (in target 'Wazn' from project 'Wazn')
+    cd /Users/runner/work/Wazn/Wazn/ios
+    builtin-swiftStdLibTool --copy --verbose --scan-executable /Users/runner/work/Wazn/Wazn/ios/build/Build/Products/Debug-iphonesimulator/Wazn.app/Wazn.debug.dylib --scan-folder /Users/runner/work/Wazn/Wazn/ios/build/Build/Products/Debug-iphonesimulator/Wazn.app/Frameworks --scan-folder /Users/runner/work/Wazn/Wazn/ios/build/Build/Products/Debug-iphonesimulator/Wazn.app/PlugIns --scan-folder /Users/runner/work/Wazn/Wazn/ios/build/Build/Products/Debug-iphonesimulator/Wazn.app/SystemExtensions --scan-folder /Users/runner/work/Wazn/Wazn/ios/build/Build/Products/Debug-iphonesimulator/Wazn.app/Extensions --platform iphonesimulator --toolchain /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/runner/work/Wazn/Wazn/ios/build/Build/Products/Debug-iphonesimulator/Wazn.app/Frameworks --strip-bitcode --strip-bitcode-tool /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/runner/work/Wazn/Wazn/ios/build/Build/Intermediates.noindex/Wazn.build/Debug-iphonesimulator/Wazn.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os --back-deploy-swift-span
+Ignoring --strip-bitcode because --sign was not passed
+
+AppIntentsSSUTraining (in target 'Wazn' from project 'Wazn')
+    cd /Users/runner/work/Wazn/Wazn/ios
+    /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsnltrainingprocessor --infoplist-path /Users/runner/work/Wazn/Wazn/ios/build/Build/Products/Debug-iphonesimulator/Wazn.app/Info.plist --temp-dir-path /Users/runner/work/Wazn/Wazn/ios/build/Build/Intermediates.noindex/Wazn.build/Debug-iphonesimulator/Wazn.build/ssu --bundle-id com.gts2svg.wazn --product-path /Users/runner/work/Wazn/Wazn/ios/build/Build/Products/Debug-iphonesimulator/Wazn.app --extracted-metadata-path /Users/runner/work/Wazn/Wazn/ios/build/Build/Products/Debug-iphonesimulator/Wazn.app/Metadata.appintents --metadata-file-list /Users/runner/work/Wazn/Wazn/ios/build/Build/Intermediates.noindex/Wazn.build/Debug-iphonesimulator/Wazn.build/Wazn.DependencyMetadataFileList --archive-ssu-assets
+2026-11-23 17:35:00.338 appintentsnltrainingprocessor[5771:19960] Parsing options for appintentsnltrainingprocessor
+2026-11-23 17:35:00.340 appintentsnltrainingprocessor[5771:19960] No AppShortcuts found - Skipping.
+
+RegisterExecutionPolicyException /Users/runner/work/Wazn/Wazn/ios/build/Build/Products/Debug-iphonesimulator/Wazn.app (in target 'Wazn' from project 'Wazn')
+    cd /Users/runner/work/Wazn/Wazn/ios
+    builtin-RegisterExecutionPolicyException /Users/runner/work/Wazn/Wazn/ios/build/Build/Products/Debug-iphonesimulator/Wazn.app
+
+Validate /Users/runner/work/Wazn/Wazn/ios/build/Build/Products/Debug-iphonesimulator/Wazn.app (in target 'Wazn' from project 'Wazn')
+    cd /Users/runner/work/Wazn/Wazn/ios
+    builtin-validationUtility /Users/runner/work/Wazn/Wazn/ios/build/Build/Products/Debug-iphonesimulator/Wazn.app -shallow-bundle -infoplist-subpath Info.plist
+
+Touch /Users/runner/work/Wazn/Wazn/ios/build/Build/Products/Debug-iphonesimulator/Wazn.app (in target 'Wazn' from project 'Wazn')
+    cd /Users/runner/work/Wazn/Wazn/ios
+    /usr/bin/touch -c /Users/runner/work/Wazn/Wazn/ios/build/Build/Products/Debug-iphonesimulator/Wazn.app
+
+** BUILD SUCCEEDED **
+
