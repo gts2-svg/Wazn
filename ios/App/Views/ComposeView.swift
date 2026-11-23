@@ -171,6 +171,7 @@ struct ComposeView: View {
             .padding(.vertical, 10)
             .padding(.horizontal, 16)
         }
+        .frame(height: 196)
         .padding(.horizontal, -16)
     }
 
