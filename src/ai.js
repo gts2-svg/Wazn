@@ -3,6 +3,7 @@
 import { METER_INFO } from './meters.js';
 import { checkRhymes } from './engine.js';
 import { verseProblems, sym } from './explain.js';
+import { CRAFT_GUIDE } from './craft.js';
 
 export const MODELS = [
   { id: 'claude-opus-5-5', label: 'Opus 5.5 — أجود شعراً' },
@@ -60,13 +61,28 @@ export function setTransport(fn) { transport = fn; }
 
 // أقصى حد للرد عند إعادة المحاولة
 const MAX_RETRY_TOKENS = 64000;
-async function callClaude({ model, system, messages, maxTokens = 32000, tool = null, onProgress = null }) {
+// النماذج التي رفضت التفكير المتكيّف مرة لا يُطلب منها ثانية في هذه الجلسة
+const noThinking = new Set();
+async function callClaude({ model, system, messages, maxTokens = 32000, tool = null, onProgress = null, think = false }) {
   const { key } = getSettings();
   if (!key) throw new AIError('أضف مفتاح الـ API من الإعدادات أولاً.');
   const body = { model, max_tokens: maxTokens, system, messages };
   // بعض النماذج لا تقبل إلزام الأداة، فنتركها «auto» ونطلب استعمالها في التعليمات
   if (tool) { body.tools = [tool]; body.tool_choice = { type: 'auto' }; }
-  let data = await transport(body, key);
+  // التفكير المتكيّف بجهد عالٍ: يخطط الشاعر ويسوّد قبل أن يكتب
+  if (think && !noThinking.has(model)) { body.thinking = { type: 'adaptive' }; body.output_config = { effort: 'high' }; }
+  let data;
+  try { data = await transport(body, key); }
+  catch (e) {
+    // إن رفض النموذج إعداد التفكير نعيد الطلب بدونه بدل أن يفشل النظم
+    if (body.thinking && e && /HTTP 400/.test(e.diag || '') && /think|output_config|effort/i.test(e.diag || '')) {
+      noThinking.add(model);
+      delete body.thinking; delete body.output_config;
+      const clean = messages.map(m => Array.isArray(m.content) ? { ...m, content: m.content.filter(c => c.type !== 'thinking' && c.type !== 'redacted_thinking') } : m);
+      body.messages = clean;
+      data = await transport(body, key);
+    } else throw e;
+  }
   // إذا استنفد التفكيرُ الحدَّ قبل أن يكتب شيئاً، نعيد مرة واحدة بحد أعلى
   const empty = (d) => d.stop_reason === 'max_tokens' && !(d.content || []).some(c => c.type === 'tool_use' || (c.type === 'text' && c.text.trim()));
   if (empty(data) && maxTokens < MAX_RETRY_TOKENS) {
@@ -82,8 +98,10 @@ async function callClaude({ model, system, messages, maxTokens = 32000, tool = n
 // يستخرج الكائن من الأداة، وإلا من النص
 function payload(res) {
   if (res.input && typeof res.input === 'object') {
-    if (typeof res.input.verses === 'string' || typeof res.input.suggestions === 'string') {
-      try { const k = res.input.verses ? 'verses' : 'suggestions'; res.input[k] = JSON.parse(res.input[k]); } catch (e) {}
+    // بعض الردود تأتي بالقوائم نصاً، فتُفك
+    for (const k of Object.keys(res.input)) {
+      const v = res.input[k];
+      if (typeof v === 'string' && /^\s*[\[{]/.test(v)) { try { res.input[k] = JSON.parse(v); } catch (e) {} }
     }
     return res.input;
   }
@@ -108,19 +126,6 @@ function followUp(messages, res, text) {
   }
 }
 
-const VERSES_TOOL = {
-  name: 'submit_verses',
-  description: 'سلّم الأبيات المؤلفة مشكولة تشكيلاً كاملاً.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      meter: { type: 'string', description: 'اسم البحر' },
-      rawi: { type: 'string', description: 'حرف الروي' },
-      verses: { type: 'array', items: { type: 'object', properties: { sadr: { type: 'string' }, ajz: { type: 'string' } }, required: ['sadr', 'ajz'] } },
-    },
-    required: ['meter', 'verses'],
-  },
-};
 const FIX_TOOL = {
   name: 'submit_suggestions',
   description: 'سلّم الصيغ المقترحة للبيت مشكولة تشكيلاً كاملاً.',
@@ -177,24 +182,80 @@ function majority(arr) {
 
 /* ---------------- التأليف ---------------- */
 
-const COMPOSE_SYSTEM = `أنت شاعر عربي فصيح متمكن من عروض الخليل بن أحمد، تكتب الشعر العمودي.
+const POET_SYSTEM = `أنت شاعر عربي فحل، تنظم الشعر العمودي على عروض الخليل بن أحمد. غايتك أن يُطرب البيت ويُحفظ ويُتمثَّل به، لا أن يسلم وزنه فحسب.
+
+${CRAFT_GUIDE}
+
+طريقة العمل:
+1. قبل الكتابة فكّر: ما المعنى الذي تبنيه القصيدة من أولها إلى آخرها؟ ما صورة كل بيت؟ أين يقع المحسّن طوعاً لا قسراً؟ وأي الأساليب تنوّع بها (نداء، استفهام، تعجب، شرط…)؟ المطلع مصرَّع، والختام بيت سائر.
+2. اكتب المسودة في تفكيرك بحرية، ثم هذّبها على البحر حتى يستقيم الوزن دون أن يذهب ماء الشعر.
+3. بعد أن تستقر الأبيات شكّلها تشكيلاً كاملاً؛ فميزانٌ عروضي آلي سيزنها.
+
 القواعد:
-- فصحى سليمة نحواً وصرفاً، بلا عامية ولا ألفاظ ركيكة.
-- كل الأبيات على بحر واحد، وبروي واحد وحركة روي واحدة.
-- شكّل كل حرف في الأبيات تشكيلاً كاملاً؛ لأن ميزاناً عروضياً آلياً سيفحص كل بيت ويرد عليك ما انكسر.
-- التزم البحر التزاماً دقيقاً، وتجنب الضرورات الشعرية النادرة.
-- نفّذ ما طلبه المستخدم من أوصاف ومعانٍ وصور وألفاظ كما طلبه، ولا تستبدله بمعانٍ عامة، ولا تلطّفه، ولا تتحاشَ منه شيئاً، ولا تعتذر، ولا تضف وعظاً أو تعليقاً.
-- لك أن تبالغ مبالغة الشعراء في التصوير والتشبيه، وأن تجري على عادة الشعر العربي في الفخر والمدح والذم والغزل.
+- فصحى جزلة سليمة نحواً وصرفاً، بلا عامية ولا ركاكة.
+- كل الأبيات على بحر واحد، وروي واحد وحركة روي واحدة، والتزم الردف إن بدأت به، ولا تكرر كلمة القافية.
+- التزم البحر، وتجنب الضرورات الشعرية النادرة.
+- نفّذ ما طلبه المستخدم من أوصاف ومعانٍ وصور وألفاظ كما طلبه، ولا تستبدله بمعانٍ عامة، ولا تلطّفه، ولا تعتذر، ولا تضف وعظاً أو تعليقاً.
+- لك أن تبالغ مبالغة الشعراء، وأن تجري على عادة الشعر العربي في الفخر والمدح والذم والغزل.
 - لا تنسب إلى الشخص وقائع محددة أو أنساباً أو مناصب لم تُذكر لك؛ أما الأوصاف والمبالغات فلك فيها السعة.
-- اجعل المعاني متماسكة غير مبتذلة، وتجنب الحشو وتكرار القوافي.
 - إن ذُكر اسم فاجعله في بيت واحد على الأقل إن استقام به الوزن.
-- وحّد حركة الروي في كل الأبيات، والتزم الردف إن بدأت به، ولا تكرر كلمة القافية.
 - إن كان الغرض هجاءً فاهجُ بحدّة وسخرية لاذعة كما يطلب المستخدم، في الطباع والأفعال والهيئة والأخلاق، بلا تلطيف. ولا يُستثنى إلا: الفحش الجنسي، والرمي بالزنا أو بجريمة، والطعن في نسب أو قبيلة أو عرق أو دين، والتهديد.
-سلّم الأبيات باستدعاء الأداة submit_verses دائماً (كل بيت صدر وعجز، مع اسم البحر وحرف الروي)، ولا تكتب الأبيات نصاً خارج الأداة.`;
+- أبيات الاستئناس إن وُجدت تريك المستوى المطلوب؛ لا تنقل منها لفظاً ولا معنى.
+- مع كل بيت اكتب «الصنعة»: سطراً قصيراً يسمي ما في البيت من بيان أو بديع أو أسلوب بموضعه من لفظه، مثل: طباق بين «أبكى» و«أضحك». وإن لم يكن فيه محسّن فاذكر ما يقوم عليه جماله. لا تدّعِ ما ليس في البيت.`;
+
+const CRITIC_SYSTEM = `أنت ناقد شعر عربي بصير على طريقة الآمدي وابن رشيق، وشاعر مجيد في الوقت نفسه. تُعرض عليك صياغات لقصيدة واحدة كتبها شاعر بحسب طلب صاحبها.
+
+${CRAFT_GUIDE}
+
+عملك:
+1. وازن بين الصياغات في: السبك وتماسك الأبيات، والصورة، والطرب والإيقاع الداخلي، وتنوع الأساليب، وسلامة اللغة، وخلوها من الحشو والتكلف والابتذال، ووفائها بطلب صاحبها.
+2. اختر أجودها.
+3. احكم على كل بيت من المختارة بصدق. البيت الضعيف (حشو، رصف بلا صورة، تكلف، معنى مبتذل، جملة خبرية باردة) أعد نظمه كاملاً على البحر والروي وحركته، ولك أن تأخذ له بيتاً أجود من صياغة أخرى إن ناسب موضعه. لا ترقّع كلمة بكلمة.
+4. أبقِ البيت القوي كما هو حرفاً بحرف.
+5. شكّل كل حرف تشكيلاً كاملاً؛ فميزانٌ عروضي آلي سيزن القصيدة.
+6. اكتب لكل بيت «الصنعة» صادقة، سطراً قصيراً بموضعها من لفظ البيت.
+7. اكتب حكمك في جملتين: لماذا اخترت هذه الصياغة، وما الذي أعدت نظمه.
+سلّم باستدعاء الأداة submit_final دائماً، ولا تكتب الأبيات نصاً خارج الأداة.`;
 
 export const PURPOSES = ['مدح', 'تهنئة', 'رثاء', 'شكر', 'حكمة', 'غزل عفيف', 'هجاء'];
 
-function composePrompt(p) {
+const VERSE_ITEM = { type: 'object', properties: { sadr: { type: 'string' }, ajz: { type: 'string' }, craft: { type: 'string', description: 'صنعة البيت في سطر' } }, required: ['sadr', 'ajz', 'craft'] };
+const DRAFTS_TOOL = {
+  name: 'submit_drafts',
+  description: 'سلّم صياغات القصيدة، كل بيت مشكول تشكيلاً كاملاً ومعه صنعته.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      meter: { type: 'string', description: 'اسم البحر' },
+      rawi: { type: 'string', description: 'حرف الروي' },
+      drafts: { type: 'array', items: { type: 'object', properties: { verses: { type: 'array', items: VERSE_ITEM } }, required: ['verses'] } },
+    },
+    required: ['meter', 'drafts'],
+  },
+};
+const FINAL_TOOL = {
+  name: 'submit_final',
+  description: 'سلّم القصيدة النهائية مشكولة، مع صنعة كل بيت وحكم الناقد.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      chosen: { type: 'integer', description: 'رقم الصياغة المختارة، من ١' },
+      verses: { type: 'array', items: VERSE_ITEM },
+      verdict: { type: 'string' },
+    },
+    required: ['chosen', 'verses'],
+  },
+};
+const ONE_VERSE_TOOL = {
+  name: 'submit_verse',
+  description: 'سلّم البيت الجديد مشكولاً تشكيلاً كاملاً مع صنعته.',
+  input_schema: { type: 'object', properties: { verse: VERSE_ITEM }, required: ['verse'] },
+};
+
+// القصيدة القصيرة تُكتب ثلاث صياغات؛ الطويلة صياغة واحدة يقوّمها الناقد
+export const DRAFTS_UP_TO = 4;
+
+function requestText(p) {
   const lines = [`الغرض: ${p.purpose}`];
   if (p.name) lines.push(`الاسم: ${p.name}`);
   if (p.details) lines.push(`التفاصيل والصفات: ${p.details}`);
@@ -202,61 +263,139 @@ function composePrompt(p) {
   if (p.meter) lines.push(`البحر: ${p.meter} (${METER_INFO[p.meter].feet})`);
   else lines.push('البحر: اختر البحر الأنسب للغرض من بحور الخليل الستة عشر.');
   if (p.rawi) lines.push(`حرف الروي: ${p.rawi}`);
-  else lines.push('حرف الروي: اختر روياً سهلاً كثير الألفاظ.');
+  else lines.push('حرف الروي: اختر روياً سهلاً كثير الألفاظ يناسب الغرض.');
   return lines.join('\n');
+}
+function exemplarText(p) {
+  const ex = (p.exemplars || []).filter(Boolean);
+  return ex.length ? `\n\nأبيات للاستئناس بالمستوى (لا تنقل منها):\n${ex.join('\n')}` : '';
+}
+function cleanVerses(list) {
+  return (list || []).filter(v => v && v.sadr && v.ajz).map(v => ({ sadr: String(v.sadr).trim(), ajz: String(v.ajz).trim(), craft: String(v.craft || '').trim() }));
+}
+function numbered(vs) { return vs.map((v, i) => `${i + 1}. ${verseText(v)}`).join('\n'); }
+
+// يزن الأبيات ويجمع عيوبها؛ يرجع { results, problems, haraka }
+async function weighAll(verses, target, rawi, check) {
+  const results = await check(verses.map(v => ({ parts: [v.sadr, v.ajz], meter: target })));
+  const rh = checkRhymes(results.map(r => r && r.rhymeInfo), { rawi });
+  const problems = [];
+  results.forEach((r, i) => {
+    const pr = r && r.exact ? [] : describeProblems(r, target);
+    for (const iss of rh.issues[i]) pr.push(`عيب في القافية (${iss.kind}): ${iss.msg}.`);
+    verses[i].ok = pr.length === 0;
+    verses[i].rhymeIssues = rh.issues[i];
+    if (pr.length) problems.push(`البيت ${i + 1}: ${verseText(verses[i])}\n- ${pr.join('\n- ')}`);
+  });
+  return { results, problems, haraka: rh.haraka && rh.haraka !== 'السكون' ? rh.haraka : null };
 }
 
 /**
- * يؤلف أبياتاً موزونة: يكتب الذكاء الاصطناعي، ويزن المحرك، ويُعاد المكسور للإصلاح
- * check(items) => Promise<results> من العامل
+ * ينظم القصيدة على مراحل: الشاعر يكتب صياغاته، والناقد يختار ويعيد نظم الضعيف،
+ * والميزان يزن، والمكسور يُعاد نظمه بيتاً كاملاً لا ترقيعاً.
+ * check(items) => Promise<results> من المحرك
  */
 export async function compose(p, check, onProgress = () => {}) {
   const { composeModel } = getSettings();
-  const messages = [{ role: 'user', content: composePrompt(p) }];
+  const nDrafts = p.count <= DRAFTS_UP_TO ? 3 : 1;
+  const request = requestText(p);
+
+  // ١) الشاعر
+  onProgress('يتأمّل ويخطّط للقصيدة…');
+  const ask = nDrafts > 1
+    ? `اكتب ثلاث صياغات مستقلة للقصيدة، تختلف في المدخل والصور والأساليب، لا تنويعات لفظية على صياغة واحدة.`
+    : 'اكتب صياغة واحدة للقصيدة.';
+  const poetMsgs = [{ role: 'user', content: `${request}${exemplarText(p)}\n\n${ask}\nسلّم باستدعاء الأداة submit_drafts.` }];
+  const pr = await callClaude({ model: composeModel, system: POET_SYSTEM, messages: poetMsgs, tool: DRAFTS_TOOL, think: true, onProgress });
+  const pd = payload(pr);
+  let drafts = (Array.isArray(pd.drafts) ? pd.drafts : []).map(d => cleanVerses(d && d.verses)).filter(d => d.length);
+  if (!drafts.length && pd.verses) drafts = [cleanVerses(pd.verses)].filter(d => d.length);
+  if (!drafts.length) { const er = new AIError('لم تصل أبيات. افتح «تفاصيل الخطأ» وصوّرها.'); er.diag = `stop: ${pr.stop}\ninput: ${JSON.stringify(pr.input || {}).slice(0, 500)}`; er.raw = (pr.text || '').slice(0, 500); throw er; }
+
+  // البحر والروي إن تُركا للشاعر
   let target = p.meter || null;
   let rawi = p.rawi || null;
-  let haraka = null;
-  let verses = [];
-  let results = [];
+  if (!target) {
+    const free = await check(drafts[0].map(v => ({ parts: [v.sadr, v.ajz] })));
+    target = majority(free.filter(r => r && r.exact).map(r => r.meter)) || normalizeMeter(pd.meter) || majority(free.map(r => r && r.meter));
+  }
+
+  // ٢) الناقد
+  onProgress(nDrafts > 1 ? 'الناقد يوازن بين الصياغات…' : 'الناقد يقرأ القصيدة…');
+  const shown = drafts.map((d, i) => `الصياغة ${i + 1}:\n${numbered(d)}`).join('\n\n');
+  const criticMsgs = [{ role: 'user', content: `طلب صاحب القصيدة:\n${request}\nالبحر: ${target || pd.meter || ''}${rawi || pd.rawi ? `، الروي: ${rawi || pd.rawi}` : ''}\n\n${shown}\n\nاختر وقوّم، وسلّم القصيدة النهائية بالأداة submit_final.` }];
+  let cr = await callClaude({ model: composeModel, system: CRITIC_SYSTEM, messages: criticMsgs, tool: FINAL_TOOL, think: true, onProgress });
+  let cd = payload(cr);
+  let verses = cleanVerses(cd.verses);
+  let chosen = Math.min(Math.max(parseInt(cd.chosen, 10) || 1, 1), drafts.length) - 1;
+  const verdict = String(cd.verdict || '').trim();
+  if (!verses.length) verses = drafts[chosen].map(v => ({ ...v }));
+
+  // ٣) الميزان، والمكسور يُعاد نظمه كاملاً
+  onProgress('يزن القصيدة…');
+  if (!rawi) {
+    const res0 = await check(verses.map(v => ({ parts: [v.sadr, v.ajz], meter: target })));
+    rawi = majority(res0.filter(r => r && r.exact).map(r => r.rhyme)) || pd.rawi || null;
+  }
+  let w = await weighAll(verses, target, rawi, check);
   let round = 0;
-
-  while (true) {
-    onProgress(round === 0 ? 'يفكّر ويكتب الأبيات… (قد يأخذ دقيقة)' : `يصلح ما انكسر (المحاولة ${round} من ${MAX_FIX_ROUNDS})…`);
-    const res = await callClaude({ model: composeModel, system: COMPOSE_SYSTEM, messages, tool: VERSES_TOOL, onProgress });
-    const data = payload(res);
-    const vs = (data.verses || []).filter(v => v && v.sadr && v.ajz).map(v => ({ sadr: String(v.sadr).trim(), ajz: String(v.ajz).trim() }));
-    if (!vs.length) { const er = new AIError('لم تصل أبيات. افتح «تفاصيل الخطأ» وصوّرها.'); er.diag = `stop: ${res.stop}\ninput: ${JSON.stringify(res.input || {}).slice(0, 500)}`; er.raw = (res.text || '').slice(0, 500); throw er; }
-    verses = vs;
-
-    onProgress('يزن الأبيات…');
-    if (!target) {
-      const free = await check(verses.map(v => ({ parts: [v.sadr, v.ajz] })));
-      target = majority(free.filter(r => r && r.exact).map(r => r.meter)) || normalizeMeter(data.meter) || majority(free.map(r => r && r.meter));
-    }
-    results = await check(verses.map(v => ({ parts: [v.sadr, v.ajz], meter: target })));
-    if (!rawi) rawi = majority(results.filter(r => r && r.exact).map(r => r.rhyme)) || data.rawi || null;
-    const rh = checkRhymes(results.map(r => r && r.rhymeInfo), { rawi });
-    haraka = rh.haraka && rh.haraka !== 'السكون' ? rh.haraka : null;
-
-    const problems = [];
-    results.forEach((r, i) => {
-      const pr = r && r.exact ? [] : describeProblems(r, target);
-      for (const iss of rh.issues[i]) pr.push(`عيب في القافية (${iss.kind}): ${iss.msg}.`);
-      verses[i].ok = pr.length === 0;
-      verses[i].rhymeIssues = rh.issues[i];
-      if (pr.length) problems.push(`البيت ${i + 1}: ${verseText(verses[i])}\n- ${pr.join('\n- ')}`);
-    });
-
-    if (!problems.length || round >= MAX_FIX_ROUNDS) break;
+  while (w.problems.length && round < MAX_FIX_ROUNDS) {
     round++;
-    followUp(messages, res,
-      `فحص الميزان الآلي الأبيات على ${target} (${METER_INFO[target] ? METER_INFO[target].feet : ''})${rawi ? ` وعلى روي «${rawi}»` : ''}، والرمز / متحرك وه ساكن. هذه الأبيات انكسرت:\n\n${problems.join('\n\n')}\n\nأصلح هذه الأبيات وحدها بأقل تغيير يحفظ المعنى، وأبقِ السليم كما هو حرفاً بحرف، وشكّل كل حرف، ثم سلّم الأبيات كلها من جديد بالترتيب نفسه.`);
+    onProgress(`يعيد نظم ما انكسر (المحاولة ${round} من ${MAX_FIX_ROUNDS})…`);
+    followUp(criticMsgs, cr,
+      `زن الميزان الآلي القصيدة على ${target} (${METER_INFO[target] ? METER_INFO[target].feet : ''})${rawi ? ` وعلى روي «${rawi}»` : ''}، والرمز / متحرك وه ساكن. هذه الأبيات انكسرت:\n\n${w.problems.join('\n\n')}\n\nأعد نظم كل بيت منكسر كاملاً بمعناه وصورته في موضعه، لا ترقيعاً لكلمة، وأبقِ السليم كما هو حرفاً بحرف، وشكّل كل حرف، ثم سلّم القصيدة كلها من جديد بالترتيب نفسه مع الصنعة بالأداة submit_final.`);
+    cr = await callClaude({ model: composeModel, system: CRITIC_SYSTEM, messages: criticMsgs, tool: FINAL_TOOL, think: true, onProgress });
+    cd = payload(cr);
+    const fixed = cleanVerses(cd.verses);
+    if (fixed.length === verses.length) verses = fixed;
+    onProgress('يزن القصيدة…');
+    w = await weighAll(verses, target, rawi, check);
+  }
+
+  // الصياغات الأخرى: تُوزن لتُعرض، ولا تُصلح
+  const alternatives = [];
+  for (let i = 0; i < drafts.length; i++) {
+    if (i === chosen) continue;
+    const vs = drafts[i].map(v => ({ ...v }));
+    const aw = await weighAll(vs, target, rawi, check);
+    alternatives.push({ number: i + 1, verses: vs.map((v, j) => ({ ...v, result: aw.results[j] })) });
   }
 
   return {
-    meter: target, rawi, haraka, rounds: round,
-    verses: verses.map((v, i) => ({ ...v, result: results[i] })),
+    meter: target, rawi, haraka: w.haraka, rounds: round, chosen: chosen + 1, verdict,
+    verses: verses.map((v, i) => ({ ...v, result: w.results[i] })),
+    alternatives,
   };
+}
+
+/**
+ * يعيد نظم بيت واحد من القصيدة ويُبقي غيره
+ * poem: { meter, rawi, haraka, verses:[{sadr,ajz}] }
+ */
+export async function regenerateVerse(p, poem, index, check, onProgress = () => {}) {
+  const { composeModel } = getSettings();
+  const target = poem.meter;
+  const others = poem.verses.filter((_, i) => i !== index).map(v => v.ajz.trim().split(/\s+/).pop());
+  const msgs = [{ role: 'user', content: `${requestText(p)}\n\nالقصيدة الآن (البحر ${target}${poem.rawi ? `، الروي «${poem.rawi}»` : ''}${poem.haraka ? ` وحركته ${poem.haraka}` : ''}):\n${numbered(poem.verses)}\n\nأعد نظم البيت رقم ${index + 1} وحده نظماً جديداً أجود منه، يخدم موضعه من القصيدة ويتصل بما قبله وما بعده، على البحر والروي وحركته. لا تكرر كلمة قافية مستعملة في غيره (${others.join('، ')}). وشكّل كل حرف، واكتب صنعته، وسلّم بالأداة submit_verse.` }];
+  let verse = null, result = null;
+  for (let round = 0; round <= 2; round++) {
+    onProgress(round === 0 ? 'ينظم بيتاً بديلاً…' : 'يعيد نظمه لأنه انكسر…');
+    const r = await callClaude({ model: composeModel, system: POET_SYSTEM, messages: msgs, tool: ONE_VERSE_TOOL, think: true, onProgress });
+    const d = payload(r);
+    const v = cleanVerses([d.verse || d])[0];
+    if (!v) continue;
+    onProgress('يزن البيت…');
+    const res = (await check([{ parts: [v.sadr, v.ajz], meter: target }]))[0];
+    const probs = res && res.exact ? [] : describeProblems(res, target);
+    const ri = res && res.rhymeInfo;
+    if (poem.rawi && ri && ri.rawi !== poem.rawi) probs.push(`الروي «${ri.rawi}» والمطلوب «${poem.rawi}».`);
+    if (poem.haraka && ri && ri.haraka && ri.haraka !== poem.haraka) probs.push(`حركة الروي ${ri.haraka} والمطلوب ${poem.haraka}.`);
+    verse = v; result = res;
+    if (!probs.length) return { ...v, ok: true, result: res };
+    followUp(msgs, r, `زن الميزان البيت فانكسر:\n- ${probs.join('\n- ')}\nأعد نظمه كاملاً على ${target} (${METER_INFO[target] ? METER_INFO[target].feet : ''})، وشكّل كل حرف، وسلّم بالأداة submit_verse.`);
+  }
+  if (!verse) throw new AIError('لم يصل بيت. حاول مرة ثانية.');
+  return { ...verse, ok: false, result };
 }
 
 /* ---------------- اقتراح التصحيح ---------------- */

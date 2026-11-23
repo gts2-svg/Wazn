@@ -47,7 +47,7 @@ struct WeighView: View {
                     .readable()
                 }
                 .scrollDismissesKeyboard(.interactively)
-                .background(C.bg.ignoresSafeArea())
+                .background(Backdrop())
                 .onChange(of: output?.items.first?.key) { _ in
                     withAnimation { proxy.scrollTo("results", anchor: .top) }
                 }
@@ -90,8 +90,8 @@ struct WeighView: View {
                 .frame(minHeight: 130)
         }
         .background(C.card)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(focused ? C.accent : C.line, lineWidth: focused ? 2 : 1))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(focused ? C.accent : C.line, lineWidth: focused ? 2 : 1))
     }
 
     private var actions: some View {
@@ -141,28 +141,27 @@ struct WeighView: View {
     }
 }
 
-/// رأس التطبيق: الشعار والاسم ورقم النسخة
+/// رأس التطبيق: الاسم كبيراً ذهبياً، ورقم النسخة في سطر واحد
 struct BrandHeader: View {
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "scalemass")
-                .font(.system(size: 24, weight: .medium))
-                .foregroundStyle(C.accent)
-                .frame(width: 52, height: 52)
-                .background(C.accentSoft)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            VStack(alignment: .leading, spacing: 0) {
-                Text("وزن").font(Fonts.verse(36, bold: true)).foregroundStyle(C.ink)
-                Text("ميزان الشعر العربي الفصيح").font(.subheadline).foregroundStyle(C.muted)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center) {
+                Text("وزن")
+                    .font(Fonts.verse(56, bold: true))
+                    .foregroundStyle(C.accent)
+                    .padding(.top, 10)
+                Spacer(minLength: 8)
+                Text("النسخة \(AppInfo.version)")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(C.muted)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.horizontal, 12).padding(.vertical, 5)
+                    .background(C.card)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(C.line, lineWidth: 1))
             }
-            Spacer()
-            Text("النسخة \(AppInfo.version)")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(C.muted)
-                .padding(.horizontal, 10).padding(.vertical, 4)
-                .background(C.card)
-                .clipShape(Capsule())
-                .overlay(Capsule().stroke(C.line, lineWidth: 1))
+            Text("ميزان الشعر العربي الفصيح").font(.headline.weight(.regular)).foregroundStyle(C.muted)
         }
     }
 }

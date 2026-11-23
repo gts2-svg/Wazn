@@ -29,6 +29,7 @@ struct AnthologyView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
+                    PageTitle("المختارات")
                     if let d = data {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
@@ -67,8 +68,7 @@ struct AnthologyView: View {
                 .readable()
             }
             .scrollDismissesKeyboard(.interactively)
-            .background(C.bg.ignoresSafeArea())
-            .navigationTitle("المختارات")
+            .background(Backdrop())
             .navigationBarTitleDisplayMode(.inline)
             .settingsButton()
         }

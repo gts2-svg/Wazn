@@ -25,6 +25,7 @@ struct MusajalaView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
+                        PageTitle("المساجلة")
                         if data.isEmpty && !failed {
                             LoadingView(text: "يحمّل…")
                         } else if failed {
@@ -74,10 +75,9 @@ struct MusajalaView: View {
                     .readable()
                 }
                 .scrollDismissesKeyboard(.interactively)
-                .background(C.bg.ignoresSafeArea())
+                .background(Backdrop())
                 .onChange(of: letter) { _ in withAnimation { proxy.scrollTo("head", anchor: .top) } }
             }
-            .navigationTitle("المساجلة")
             .navigationBarTitleDisplayMode(.inline)
             .settingsButton()
         }

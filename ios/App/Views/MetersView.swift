@@ -28,7 +28,7 @@ struct MetersView: View {
                 .padding(16)
                 .readable()
             }
-            .background(C.bg.ignoresSafeArea())
+            .background(Backdrop())
             .navigationTitle("البحور")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

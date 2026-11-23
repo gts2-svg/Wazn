@@ -20,6 +20,7 @@ struct DiwansView: View {
         NavigationStack(path: $path) {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
+                    PageTitle("الدواوين")
                     if !index.isEmpty {
                         Lead("\(index.count.ar) ديواناً ومجموعة، فيها \(index.reduce(0) { $0 + $1.verses }.ar) بيت، محفوظة كلها في التطبيق وتعمل بلا إنترنت.")
                         SearchField(placeholder: "ابحث في كل الدواوين", text: $allQuery) {
@@ -45,8 +46,7 @@ struct DiwansView: View {
                 .readable()
             }
             .scrollDismissesKeyboard(.interactively)
-            .background(C.bg.ignoresSafeArea())
-            .navigationTitle("الدواوين")
+            .background(Backdrop())
             .navigationBarTitleDisplayMode(.inline)
             .settingsButton()
             .navigationDestination(for: DiwanRoute.self) { r in
@@ -164,7 +164,7 @@ struct DiwanScreen: View {
             .readable()
         }
         .scrollDismissesKeyboard(.interactively)
-        .background(C.bg.ignoresSafeArea())
+        .background(Backdrop())
         .navigationTitle(meta?.name ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -314,7 +314,7 @@ struct PoemScreen: View {
                 .padding(16)
                 .readable()
             }
-            .background(C.bg.ignoresSafeArea())
+            .background(Backdrop())
             .task {
                 if d == nil {
                     d = try? await Library.shared.loadDiwan(id)
@@ -377,7 +377,7 @@ struct AllSearchScreen: View {
             .padding(16)
             .readable()
         }
-        .background(C.bg.ignoresSafeArea())
+        .background(Backdrop())
         .navigationTitle("البحث في الدواوين")
         .navigationBarTitleDisplayMode(.inline)
         .task {

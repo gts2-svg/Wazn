@@ -215,6 +215,14 @@ final class WaznCore: @unchecked Sendable {
         return try decode(ComposeOutput.self, json)
     }
 
+    func regenerateVerse(_ p: ComposeParams, poem: ComposeOutput, index: Int, progress: @escaping (String) -> Void) async throws -> ComposedVerse {
+        let pj = String(data: try JSONEncoder().encode(p), encoding: .utf8) ?? "{}"
+        let body = PoemForRegen(meter: poem.meter, rawi: poem.rawi, haraka: poem.haraka, verses: poem.verses.map { RegenVerse(sadr: $0.sadr, ajz: $0.ajz) })
+        let poemJ = String(data: try JSONEncoder().encode(body), encoding: .utf8) ?? "{}"
+        let json = try await callAsync("regenerateVerse", [pj, poemJ, index], progress: progress)
+        return try decode(ComposedVerse.self, json)
+    }
+
     func suggestFix(id: Int, rawi: String, haraka: String, progress: @escaping (String) -> Void) async throws -> [Suggestion] {
         let opts = String(data: try JSONEncoder().encode(["rawi": rawi, "haraka": haraka]), encoding: .utf8) ?? "{}"
         let json = try await callAsync("suggestFix", [id, opts], progress: progress)

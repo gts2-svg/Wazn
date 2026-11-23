@@ -83,15 +83,37 @@ struct ComposeOutput: Codable {
     let rawi: String
     let haraka: String
     let rounds: Int
+    var verses: [ComposedVerse]
+    // ما زاد في النظم الجديد؛ اختيارية لتُقرأ القصائد المحفوظة قبله
+    var chosen: Int? = nil
+    var verdict: String? = nil
+    var alternatives: [AltDraft]? = nil
+}
+
+struct AltDraft: Codable, Hashable {
+    let number: Int
     let verses: [ComposedVerse]
 }
 
-struct ComposedVerse: Codable {
+struct ComposedVerse: Codable, Hashable {
     let sadr: String
     let ajz: String
     let ok: Bool
+    var craft: String? = nil
     let result: ResultUI?
+
+    static func == (a: ComposedVerse, b: ComposedVerse) -> Bool { a.sadr == b.sadr && a.ajz == b.ajz && a.ok == b.ok }
+    func hash(into h: inout Hasher) { h.combine(sadr); h.combine(ajz) }
 }
+
+/// ما يُرسل لإعادة نظم بيت واحد
+struct PoemForRegen: Codable {
+    let meter: String
+    let rawi: String
+    let haraka: String
+    let verses: [RegenVerse]
+}
+struct RegenVerse: Codable { let sadr: String; let ajz: String }
 
 struct Suggestion: Decodable {
     let sadr: String

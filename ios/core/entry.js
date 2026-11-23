@@ -5,7 +5,8 @@
 import { analyzeVerse, setDictionary, parseDictionary, dictionarySize, splitVerse, checkRhymes } from '../../src/engine.js';
 import { verseProblems, sym } from '../../src/explain.js';
 import { METER_INFO } from '../../src/meters.js';
-import { getSettings, saveSettings, hasKey, testKey, compose, suggestFix, setTransport, MODELS, PURPOSES, AIError, AUTO_FIX_LIMIT } from '../../src/ai.js';
+import { getSettings, saveSettings, hasKey, testKey, compose, regenerateVerse, suggestFix, setTransport, MODELS, PURPOSES, AIError, AUTO_FIX_LIMIT } from '../../src/ai.js';
+import EXEMPLARS from '../../data/exemplars.json';
 import { lastLetter, LETTERS } from '../../src/musajala.js';
 
 /* ---------------- ما يقدّمه التطبيق (Swift) ----------------
@@ -167,6 +168,30 @@ function errJSON(e) {
   });
 }
 
+
+/* ---------------- النظم ---------------- */
+function composedUI(v, i) {
+  if (v.result && !v.result.error && !v.result.empty) v.result.rhymeIssues = v.rhymeIssues || [];
+  return { sadr: v.sadr, ajz: v.ajz, ok: !!v.ok, craft: v.craft || '', result: v.result ? toUI(v.result, `البيت ${i + 1}`) : null };
+}
+
+// أبيات الاستئناس: من الغرض نفسه، والبحر المطلوب أولاً، وبيتان على الأكثر لكل شاعر ما أمكن
+const PURPOSE_POOL = { 'مدح': 'مدح', 'تهنئة': 'مدح', 'شكر': 'مدح', 'رثاء': 'رثاء', 'حكمة': 'حكمة', 'هجاء': 'هجاء', 'غزل عفيف': 'غزل' };
+function pickExemplars(purpose, meter, n = 8) {
+  const pool = (EXEMPLARS[PURPOSE_POOL[purpose] || 'عام'] || []).slice();
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  pool.sort((a, b) => (b.meter === meter) - (a.meter === meter));
+  const out = [], per = new Map();
+  for (const cap of [2, 99]) {
+    for (const e of pool) {
+      if (out.length >= n) break;
+      if (out.includes(e) || (per.get(e.poet) || 0) >= cap) continue;
+      out.push(e); per.set(e.poet, (per.get(e.poet) || 0) + 1);
+    }
+  }
+  return out.map(e => `${e.t} (${e.poet}، ${e.meter})`);
+}
+
 /* ---------------- الواجهة التي يستدعيها Swift ---------------- */
 globalThis.Wazn = {
   init(dictText) {
@@ -188,12 +213,20 @@ globalThis.Wazn = {
   // p: { purpose, name, details, count, meter, rawi } → done(json, errJson)
   compose(pJSON, onProgress, done) {
     const p = JSON.parse(pJSON);
+    p.exemplars = pickExemplars(p.purpose, p.meter);
     compose(p, check, (m) => onProgress(String(m))).then(res => {
-      const verses = res.verses.map((v, i) => {
-        if (v.result && !v.result.error && !v.result.empty) v.result.rhymeIssues = v.rhymeIssues || [];
-        return { sadr: v.sadr, ajz: v.ajz, ok: !!v.ok, result: v.result ? toUI(v.result, `البيت ${i + 1}`) : null };
-      });
-      done(JSON.stringify({ meter: res.meter || '', rawi: res.rawi || '', haraka: res.haraka || '', rounds: res.rounds || 0, verses }), null);
+      const verses = res.verses.map((v, i) => composedUI(v, i));
+      const alternatives = (res.alternatives || []).map(a => ({ number: a.number, verses: a.verses.map((v, i) => composedUI(v, i)) }));
+      done(JSON.stringify({ meter: res.meter || '', rawi: res.rawi || '', haraka: res.haraka || '', rounds: res.rounds || 0, chosen: res.chosen || 1, verdict: res.verdict || '', verses, alternatives }), null);
+    }, e => done(null, errJSON(e)));
+  },
+
+  // يعيد نظم بيت واحد: poem { meter, rawi, haraka, verses:[{sadr,ajz}] }
+  regenerateVerse(pJSON, poemJSON, index, onProgress, done) {
+    const p = JSON.parse(pJSON);
+    const poem = JSON.parse(poemJSON);
+    regenerateVerse(p, poem, index, check, (m) => onProgress(String(m))).then(v => {
+      done(JSON.stringify(composedUI(v, index)), null);
     }, e => done(null, errJSON(e)));
   },
 

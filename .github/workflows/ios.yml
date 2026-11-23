@@ -21,7 +21,7 @@ jobs:
     runs-on: macos-15-intel
     timeout-minutes: 75
     env:
-      SHOTS: "write write-done weigh broken poem3 anthology diwans poem musajala settings"
+      SHOTS: "write@dark write write-done@dark craft@dark craft weigh@dark weigh broken@dark anthology@dark anthology diwans@dark poem musajala@dark settings@dark"
     steps:
       - uses: actions/checkout@v4
 
@@ -87,17 +87,19 @@ jobs:
               i=$((i+1))
               xcrun simctl terminate "$U" com.gts2svg.wazn > /dev/null 2>&1 || true
               rm -f "$DOCS/shot-ready.txt"
-              PID=$(xcrun simctl launch "$U" com.gts2svg.wazn -shot "$s" | awk '{print $NF}')
+              # «@dark» في آخر الاسم: الصورة بالوضع الداكن
+              n="${s%@dark}"; if [ "$n" != "$s" ]; then xcrun simctl ui "$U" appearance dark; else xcrun simctl ui "$U" appearance light; fi
+              PID=$(xcrun simctl launch "$U" com.gts2svg.wazn -shot "$n" | awk '{print $NF}')
               for w in $(seq 1 120); do [ -f "$DOCS/shot-ready.txt" ] && break; sleep 0.5; done
               [ -f "$DOCS/shot-ready.txt" ] || echo "::warning::$1 $s: no ready marker"
               sleep 1.5
-              xcrun simctl io "$U" screenshot "$SH/$1-$(printf %02d $i)-$s.png" > /dev/null
+              xcrun simctl io "$U" screenshot "$SH/$1-$(printf %02d $i)-${s/@/-}.png" > /dev/null
               if ! ps -p "$PID" > /dev/null 2>&1; then echo "::error::$1 $s: the app quit"; echo "$1 $s crashed" >> "$SH/problems.txt"; fi
             done
             xcrun simctl shutdown "$U" || true
           }
           shoot iphone
-          SHOTS="write-done weigh" shoot ipad
+          SHOTS="write-done@dark weigh" shoot ipad
           ls -la "$SH"
           ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -i wazn | head || true
           for f in $(ls ~/Library/Logs/DiagnosticReports/Wazn* 2>/dev/null | head -2); do head -150 "$f" >> "$SH/crash.txt"; done

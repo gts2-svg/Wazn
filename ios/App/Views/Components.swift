@@ -7,8 +7,8 @@ extension View {
         self.padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(C.card)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(C.line, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(C.line, lineWidth: 1))
     }
 
     /// زر الإعدادات في شريط كل تبويب
@@ -99,13 +99,13 @@ struct PrimaryButton: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 if busy { ProgressView().tint(C.onAccent) }
-                Text(title).font(.headline)
+                Text(title).font(Fonts.verse(22, bold: true))
             }
-            .frame(minWidth: 96)
-            .padding(.horizontal, 22).padding(.vertical, 11)
+            .frame(minWidth: 110, minHeight: 30)
+            .padding(.horizontal, 24).padding(.vertical, 8)
             .foregroundStyle(C.onAccent)
             .background(C.accent.opacity(disabled ? 0.45 : 1))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .clipShape(Capsule())
         }
         .buttonStyle(.plain)
         .disabled(disabled || busy)

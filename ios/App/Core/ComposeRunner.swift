@@ -22,6 +22,10 @@ final class ComposeRunner: ObservableObject {
     @Published private(set) var lastParams: ComposeParams?
     /// يزيد كلما جهزت قصيدة جديدة، لتنتقل الشاشة إليها
     @Published private(set) var revision = 0
+    /// البيت الذي يُعاد نظمه الآن، وحاله
+    @Published private(set) var regenIndex: Int?
+    @Published private(set) var regenStatus = ""
+    @Published var regenError: AIFailure?
 
     private var bgTask: UIBackgroundTaskIdentifier = .invalid
     private var continued: AnyObject?          // BGContinuedProcessingTask (iOS 26+)
@@ -49,7 +53,7 @@ final class ComposeRunner: ObservableObject {
     func start(_ p: ComposeParams) {
         guard !isRunning else { return }
         phase = .running
-        status = "يفكّر ويكتب الأبيات… (قد يأخذ دقيقة)"
+        status = "يتأمّل ويخطّط للقصيدة…"
         autoIDs = []
         lastParams = p
         askNotificationPermission()
@@ -86,6 +90,41 @@ final class ComposeRunner: ObservableObject {
         }
     }
 
+    /// يعيد نظم بيت واحد ويُبقي غيره
+    func regenerate(_ index: Int) {
+        guard case .done(var out) = phase, let p = lastParams, regenIndex == nil, out.verses.indices.contains(index) else { return }
+        regenIndex = index
+        regenStatus = "ينظم بيتاً بديلاً…"
+        regenError = nil
+        Task { @MainActor in
+            do {
+                let v = try await WaznCore.shared.regenerateVerse(p, poem: out, index: index) { [weak self] m in self?.regenStatus = m }
+                out.verses[index] = v
+                phase = .done(out)
+                save(out, p)
+            } catch let e as AIFailure {
+                regenError = e
+            } catch {
+                regenError = AIFailure(message: "حدث خطأ: " + error.localizedDescription, diag: "", raw: "")
+            }
+            regenIndex = nil
+            regenStatus = ""
+        }
+    }
+
+    /// يعتمد صياغة أخرى بدل التي اختارها الناقد، وتصير المختارة بين البدائل
+    func adopt(_ alt: AltDraft) {
+        guard case .done(var out) = phase, var alts = out.alternatives, let i = alts.firstIndex(of: alt) else { return }
+        let previous = AltDraft(number: out.chosen ?? 1, verses: out.verses)
+        out.verses = alt.verses
+        out.chosen = alt.number
+        alts[i] = previous
+        alts.sort { $0.number < $1.number }
+        out.alternatives = alts
+        phase = .done(out)
+        if let p = lastParams { save(out, p) }
+    }
+
     #if DEBUG
     /// لوضع التصوير: قصيدة جاهزة موزونة بالمحرك الحقيقي
     func demo() async {
@@ -93,13 +132,20 @@ final class ComposeRunner: ObservableObject {
                   ("وتعظُمُ في عينِ الصغيرِ صغارُها", "وتصغُرُ في عينِ العظيمِ العظائمُ"),
                   ("يُكلِّفُ سيفُ الدولةِ الجيشَ همَّهُ", "وقد عجزتْ عنه الجيوشُ الخضارمُ"),
                   ("ويطلبُ عند الناسِ ما عند نفسِه", "وذلك ما لا تدّعيه الضراغمُ")]
+        let crafts = ["مقابلة بين «أهل العزم» و«الكرام» و«العزائم» و«المكارم»، وتصريع المطلع",
+                      "طباق بين «تعظم» و«تصغر» و«الصغير» و«العظيم»، ورد العجز على الصدر",
+                      "استعارة: جعل للهمّ ثقلاً يُكلَّف به الجيش",
+                      "مقابلة بين ما عند الناس وما عند النفس"]
         var out: [ComposedVerse] = []
-        for v in vs {
+        for (i, v) in vs.enumerated() {
             let o = try? await WaznCore.shared.weigh(v.0 + " * " + v.1)
             let r = o?.items.first
-            out.append(ComposedVerse(sadr: v.0, ajz: v.1, ok: r?.exact == true, result: r))
+            out.append(ComposedVerse(sadr: v.0, ajz: v.1, ok: r?.exact == true, craft: crafts[i], result: r))
         }
-        phase = .done(ComposeOutput(meter: "الطويل", rawi: "م", haraka: "الضمة", rounds: 1, verses: out))
+        let alt = AltDraft(number: 2, verses: Array(out.reversed()))
+        phase = .done(ComposeOutput(meter: "الطويل", rawi: "م", haraka: "الضمة", rounds: 1, verses: out,
+                                    chosen: 1, verdict: "اخترت الأولى لتماسك معانيها وقوة مطلعها، وأعدت نظم البيت الرابع لأنه جاء خبراً بارداً.",
+                                    alternatives: [alt, AltDraft(number: 3, verses: Array(out.prefix(2)))]))
         revision += 1
     }
     #endif
