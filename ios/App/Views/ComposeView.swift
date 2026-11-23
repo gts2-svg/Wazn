@@ -100,6 +100,9 @@ struct ComposeView: View {
                     .onChange(of: runner.isRunning) { r in
                         if r { withAnimation { proxy.scrollTo("out", anchor: .top) } }
                     }
+                    .onChange(of: runner.revision) { _ in
+                        withAnimation { proxy.scrollTo("out", anchor: .top) }
+                    }
                 }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
@@ -403,14 +406,17 @@ struct PurposeCard: View {
                 .foregroundStyle(.white.opacity(0.08))
                 .offset(x: -18, y: -30)
                 .frame(maxWidth: .infinity, alignment: .trailing)
-            VStack(alignment: .leading) {
-                Text(p.name).font(Fonts.verse(26, bold: true)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.7)
-                Spacer()
-                Text(p.sample).font(Fonts.verse(13)).foregroundStyle(.white.opacity(0.78)).lineLimit(2)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(p.name).font(Fonts.verse(25, bold: true)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.7)
+                    .padding(.top, 10)
+                Spacer(minLength: 4)
+                Text(p.sample).font(Fonts.verse(13)).foregroundStyle(.white.opacity(0.8)).lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 6)
             }
-            .padding(14)
+            .padding(.horizontal, 14).padding(.vertical, 10)
         }
-        .frame(width: 132, height: 150)
+        .frame(width: 136, height: 164)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(.white.opacity(on ? 0.45 : 0.12), lineWidth: on ? 1.5 : 1))
         .scaleEffect(on ? 1 : 0.94)

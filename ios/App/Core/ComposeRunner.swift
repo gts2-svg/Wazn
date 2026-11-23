@@ -20,6 +20,8 @@ final class ComposeRunner: ObservableObject {
     @Published private(set) var status = ""
     @Published private(set) var autoIDs: Set<Int> = []
     @Published private(set) var lastParams: ComposeParams?
+    /// يزيد كلما جهزت قصيدة جديدة، لتنتقل الشاشة إليها
+    @Published private(set) var revision = 0
 
     private var bgTask: UIBackgroundTaskIdentifier = .invalid
     private var continued: AnyObject?          // BGContinuedProcessingTask (iOS 26+)
@@ -66,6 +68,7 @@ final class ComposeRunner: ObservableObject {
                 }
                 autoIDs = auto
                 phase = .done(r)
+                revision += 1
                 save(r, p)
                 notifyDone(r)
                 endBackground(success: true)
@@ -97,6 +100,7 @@ final class ComposeRunner: ObservableObject {
             out.append(ComposedVerse(sadr: v.0, ajz: v.1, ok: r?.exact == true, result: r))
         }
         phase = .done(ComposeOutput(meter: "الطويل", rawi: "م", haraka: "الضمة", rounds: 1, verses: out))
+        revision += 1
     }
     #endif
 
