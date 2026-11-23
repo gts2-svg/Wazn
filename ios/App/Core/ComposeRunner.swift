@@ -27,6 +27,12 @@ final class ComposeRunner: ObservableObject {
     @Published private(set) var regenStatus = ""
     @Published var regenError: AIFailure?
 
+    /// يزيد عند كل نظم جديد أو إيقاف، فيُهمل ما يصل من نظم أُوقف
+    private var runID = 0
+    private var startedAt = Date()
+    private var heartbeat: Timer?
+    private var observers: [NSObjectProtocol] = []
+
     private var bgTask: UIBackgroundTaskIdentifier = .invalid
     private var continued: AnyObject?          // BGContinuedProcessingTask (iOS 26+)
     private var continuedID: String?
@@ -37,6 +43,21 @@ final class ComposeRunner: ObservableObject {
     var isRunning: Bool { if case .running = phase { return true }; return false }
 
     init() {
+        // خروج المستخدم من التطبيق ورجوعه في أثناء النظم يُكتب في السجل
+        let nc = NotificationCenter.default
+        observers.append(nc.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
+            Task { @MainActor in
+                let r = ComposeRunner.shared
+                guard r.isRunning else { return }
+                ComposeLog.shared.add("◐ خرج المستخدم من التطبيق (وقت الخلفية المتبقي: \(Int(min(UIApplication.shared.backgroundTimeRemaining, 9999)))ث، مهمة iOS 26: \(r.continued == nil ? "لم تبدأ" : "تعمل"))")
+                ComposeLog.shared.save()
+            }
+        })
+        observers.append(nc.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { _ in
+            Task { @MainActor in
+                if ComposeRunner.shared.isRunning { ComposeLog.shared.add("◑ رجع المستخدم إلى التطبيق") }
+            }
+        })
         if let d = UserDefaults.standard.data(forKey: Self.savedKey),
            let s = try? JSONDecoder().decode(SavedPoem.self, from: d) {
             phase = .done(s.output)
@@ -52,19 +73,29 @@ final class ComposeRunner: ObservableObject {
 
     func start(_ p: ComposeParams) {
         guard !isRunning else { return }
+        runID += 1
+        let myRun = runID
         phase = .running
         status = "يتأمّل ويخطّط للقصيدة…"
         autoIDs = []
         lastParams = p
+        startedAt = Date()
+        ComposeLog.shared.begin("نظم: \(p.purpose)، \(p.count) أبيات، البحر \(p.meter ?? "يختاره الشاعر")، الروي \(p.rawi ?? "يختاره الشاعر")")
         askNotificationPermission()
         beginBackground(p)
+        startHeartbeat()
 
         Task { @MainActor in
             do {
                 let r = try await WaznCore.shared.compose(p) { [weak self] m in
-                    self?.status = m
-                    self?.reportProgress(m)
+                    guard let self, self.runID == myRun else { return }
+                    ComposeLog.shared.add("● \(m)")
+                    self.status = m
+                    self.reportProgress(m)
                 }
+                guard runID == myRun else { return }
+                ComposeLog.shared.end("✓ تمّت في \(ComposeLog.mmss(Date().timeIntervalSince(startedAt))) · جولات الإصلاح \(r.rounds) · الموزون \(r.verses.filter(\.ok).count) من \(r.verses.count)")
+                stopHeartbeat()
                 var auto: Set<Int> = []
                 if let s = try? await WaznCore.shared.settings(), s.autoFix {
                     let limit = await WaznCore.shared.autoFixLimit()
@@ -77,16 +108,58 @@ final class ComposeRunner: ObservableObject {
                 notifyDone(r)
                 endBackground(success: true)
             } catch let e as AIFailure {
+                guard runID == myRun else { return }
+                ComposeLog.shared.end("✗ فشل: \(e.message) \(e.diag)")
+                stopHeartbeat()
                 phase = .failed(e)
                 notifyFailed(e.message)
                 endBackground(success: false)
             } catch {
+                guard runID == myRun else { return }
+                ComposeLog.shared.end("✗ فشل: \(error.localizedDescription)")
+                stopHeartbeat()
                 let e = AIFailure(message: "حدث خطأ: " + error.localizedDescription, diag: "", raw: "")
                 phase = .failed(e)
                 notifyFailed(e.message)
                 endBackground(success: false)
             }
             status = ""
+        }
+    }
+
+    /// زر «أوقف»: يقطع الطلب الجاري ويرجع إلى الاختيار
+    func cancel() {
+        guard isRunning else { return }
+        runID += 1
+        ComposeLog.shared.end("■ أوقفه المستخدم بعد \(ComposeLog.mmss(Date().timeIntervalSince(startedAt)))")
+        WaznCore.shared.cancelAll()
+        stopHeartbeat()
+        endBackground(success: false)
+        status = ""
+        phase = .idle
+    }
+
+    // MARK: - نبض للنظام
+
+    /// يبلّغ iOS بالتقدم كل ثلاث ثوانٍ، فلا يظن مهمة الخلفية متوقفة في أثناء طلب طويل
+    private func startHeartbeat() {
+        heartbeat?.invalidate()
+        heartbeat = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { _ in
+            Task { @MainActor in ComposeRunner.shared.beat() }
+        }
+    }
+
+    private func stopHeartbeat() {
+        heartbeat?.invalidate()
+        heartbeat = nil
+    }
+
+    private func beat() {
+        guard isRunning else { stopHeartbeat(); return }
+        if #available(iOS 26.0, *), let t = continued as? BGContinuedProcessingTask {
+            let p = t.progress
+            if p.completedUnitCount < 95 { p.completedUnitCount += 1 }
+            t.updateTitle(t.title, subtitle: "\(status) · \(ComposeLog.mmss(Date().timeIntervalSince(startedAt)))")
         }
     }
 
@@ -168,6 +241,8 @@ final class ComposeRunner: ObservableObject {
     private func beginBackground(_ p: ComposeParams) {
         // مهلة قصيرة يمنحها النظام لأي تطبيق يخرج منه المستخدم
         bgTask = UIApplication.shared.beginBackgroundTask(withName: "wazn.compose") { [weak self] in
+            ComposeLog.shared.add("◆ انتهت مهلة الخلفية القصيرة")
+            ComposeLog.shared.save()
             Task { @MainActor in self?.endSystemTask() }
         }
         // ومهمة خلفية يبدأها المستخدم بيده، يُظهر النظام تقدّمها ويتركها تكمل (iOS 26 فما بعد)
@@ -182,7 +257,10 @@ final class ComposeRunner: ObservableObject {
                     runner.continued = t
                     t.progress.totalUnitCount = 100
                     t.progress.completedUnitCount = 5
+                    ComposeLog.shared.add("◆ بدأت مهمة الخلفية (iOS 26)")
                     t.expirationHandler = {
+                        ComposeLog.shared.add("◆ أوقف النظامُ مهمةَ الخلفية")
+                        ComposeLog.shared.save()
                         Task { @MainActor in ComposeRunner.shared.continued = nil }
                     }
                 }
@@ -190,7 +268,12 @@ final class ComposeRunner: ObservableObject {
             if ok {
                 let req = BGContinuedProcessingTaskRequest(identifier: id, title: "«وزن» ينظم القصيدة", subtitle: "قصيدة في \(p.purpose)")
                 req.strategy = .fail
-                do { try BGTaskScheduler.shared.submit(req) } catch { NSLog("[wazn] continued task: %@", "\(error)") }
+                do { try BGTaskScheduler.shared.submit(req) } catch {
+                    NSLog("[wazn] continued task: %@", "\(error)")
+                    ComposeLog.shared.add("◆ رُفض طلب مهمة الخلفية: \(error.localizedDescription)")
+                }
+            } else {
+                ComposeLog.shared.add("◆ لم يُسجَّل معرّف مهمة الخلفية")
             }
         }
     }

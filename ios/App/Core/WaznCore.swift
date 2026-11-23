@@ -117,9 +117,48 @@ final class WaznCore: @unchecked Sendable {
         }
     }
 
+    /// يزيد عند كل إيقاف، فتُهمل الطلبات التي بدأت قبله
+    private let genLock = NSLock()
+    private var generation = 0
+    private var currentGeneration: Int { genLock.lock(); defer { genLock.unlock() }; return generation }
+
+    /// يوقف كل طلب جارٍ إلى Anthropic (زر «أوقف»)
+    func cancelAll() {
+        genLock.lock(); generation += 1; genLock.unlock()
+        session.getAllTasks { $0.forEach { $0.cancel() } }
+    }
+
+    /// وصف مختصر للطلب في السجل: النموذج والجهد والأداة
+    private static func describe(_ body: String) -> String {
+        guard let d = body.data(using: .utf8),
+              let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else { return "طلب" }
+        let model = o["model"] as? String ?? "?"
+        let effort = (o["output_config"] as? [String: Any])?["effort"] as? String ?? "بلا تفكير"
+        let tool = ((o["tools"] as? [[String: Any]])?.first?["name"] as? String) ?? "-"
+        let turns = (o["messages"] as? [Any])?.count ?? 0
+        return "\(tool) · \(model) · جهد \(effort) · رسائل \(turns)"
+    }
+
+    /// ما يهم من الرد في السجل: السبب ورموز التفكير والخرج
+    private static func summary(_ text: String) -> String {
+        guard let d = text.data(using: .utf8),
+              let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else { return "" }
+        if let e = o["error"] as? [String: Any] { return "خطأ: \(e["message"] as? String ?? "")" }
+        let stop = o["stop_reason"] as? String ?? "?"
+        let u = o["usage"] as? [String: Any] ?? [:]
+        let inT = u["input_tokens"] as? Int ?? 0
+        let outT = u["output_tokens"] as? Int ?? 0
+        return "توقف: \(stop) · دخل \(inT) · خرج \(outT)"
+    }
+
     /// طلب Anthropic من التطبيق نفسه؛ النتيجة تعود إلى JavaScript على طابور المحرك
-    private func post(body: String, key: String, done: JSValue, attempt: Int = 0) {
+    private func post(body: String, key: String, done: JSValue, attempt: Int = 0, gen: Int? = nil) {
         guard let url = URL(string: "https://api.anthropic.com/v1/messages") else { return }
+        let myGen = gen ?? currentGeneration
+        if myGen != currentGeneration {
+            queue.async { done.call(withArguments: [0, "", true]) }
+            return
+        }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.timeoutInterval = 600
@@ -127,19 +166,32 @@ final class WaznCore: @unchecked Sendable {
         req.setValue(key, forHTTPHeaderField: "x-api-key")
         req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         req.httpBody = body.data(using: .utf8)
+        let what = Self.describe(body)
+        let sent = Date()
+        ComposeLog.shared.add("← أرسل \(what)\(attempt > 0 ? " (إعادة \(attempt))" : "")")
         session.dataTask(with: req) { [weak self] data, resp, err in
+            guard let self else { return }
+            let secs = Int(Date().timeIntervalSince(sent))
             let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
             let text = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
             let netError = err != nil && resp == nil
+            if myGen != self.currentGeneration {
+                ComposeLog.shared.add("× أُلغي الطلب بعد \(secs)ث")
+                self.queue.async { done.call(withArguments: [0, "", true]) }
+                return
+            }
             // انقطع الاتصال في أثناء الطلب: يعيده كل خمس ثوانٍ حتى يعود النت (إلى خمس دقائق)
             if netError, attempt < 60, let code = (err as? URLError)?.code,
                [.networkConnectionLost, .notConnectedToInternet, .timedOut, .cannotConnectToHost, .dnsLookupFailed, .cannotFindHost].contains(code) {
-                self?.queue.asyncAfter(deadline: .now() + 5) {
-                    self?.post(body: body, key: key, done: done, attempt: attempt + 1)
+                ComposeLog.shared.add("! انقطع بعد \(secs)ث (URLError \(code.rawValue)) — يعيده بعد ٥ث")
+                self.queue.asyncAfter(deadline: .now() + 5) {
+                    self.post(body: body, key: key, done: done, attempt: attempt + 1, gen: myGen)
                 }
                 return
             }
-            self?.queue.async {
+            if let err { ComposeLog.shared.add("! فشل بعد \(secs)ث: \(err.localizedDescription)") }
+            else { ComposeLog.shared.add("→ رد HTTP \(status) بعد \(secs)ث · \(Self.summary(text))") }
+            self.queue.async {
                 done.call(withArguments: [status, text, netError])
             }
         }.resume()

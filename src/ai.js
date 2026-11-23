@@ -63,14 +63,14 @@ export function setTransport(fn) { transport = fn; }
 const MAX_RETRY_TOKENS = 64000;
 // النماذج التي رفضت التفكير المتكيّف مرة لا يُطلب منها ثانية في هذه الجلسة
 const noThinking = new Set();
-async function callClaude({ model, system, messages, maxTokens = 32000, tool = null, onProgress = null, think = false }) {
+async function callClaude({ model, system, messages, maxTokens = 32000, tool = null, onProgress = null, think = false, effort = 'high' }) {
   const { key } = getSettings();
   if (!key) throw new AIError('أضف مفتاح الـ API من الإعدادات أولاً.');
   const body = { model, max_tokens: maxTokens, system, messages };
   // بعض النماذج لا تقبل إلزام الأداة، فنتركها «auto» ونطلب استعمالها في التعليمات
   if (tool) { body.tools = [tool]; body.tool_choice = { type: 'auto' }; }
-  // التفكير المتكيّف بجهد عالٍ: يخطط الشاعر ويسوّد قبل أن يكتب
-  if (think && !noThinking.has(model)) { body.thinking = { type: 'adaptive' }; body.output_config = { effort: 'high' }; }
+  // التفكير المتكيّف: عالٍ للشاعر، ومتوسط للناقد، وخفيف لإصلاح الوزن
+  if (think && !noThinking.has(model)) { body.thinking = { type: 'adaptive' }; body.output_config = { effort }; }
   let data;
   try { data = await transport(body, key); }
   catch (e) {
@@ -324,7 +324,7 @@ export async function compose(p, check, onProgress = () => {}) {
   onProgress(nDrafts > 1 ? 'الناقد يوازن بين الصياغات…' : 'الناقد يقرأ القصيدة…');
   const shown = drafts.map((d, i) => `الصياغة ${i + 1}:\n${numbered(d)}`).join('\n\n');
   const criticMsgs = [{ role: 'user', content: `طلب صاحب القصيدة:\n${request}\nالبحر: ${target || pd.meter || ''}${rawi || pd.rawi ? `، الروي: ${rawi || pd.rawi}` : ''}\n\n${shown}\n\nاختر وقوّم، وسلّم القصيدة النهائية بالأداة submit_final.` }];
-  let cr = await callClaude({ model: composeModel, system: CRITIC_SYSTEM, messages: criticMsgs, tool: FINAL_TOOL, think: true, onProgress });
+  let cr = await callClaude({ model: composeModel, system: CRITIC_SYSTEM, messages: criticMsgs, tool: FINAL_TOOL, think: true, effort: 'medium', onProgress });
   let cd = payload(cr);
   let verses = cleanVerses(cd.verses);
   let chosen = Math.min(Math.max(parseInt(cd.chosen, 10) || 1, 1), drafts.length) - 1;
@@ -344,7 +344,7 @@ export async function compose(p, check, onProgress = () => {}) {
     onProgress(`يعيد نظم ما انكسر (المحاولة ${round} من ${MAX_FIX_ROUNDS})…`);
     followUp(criticMsgs, cr,
       `زن الميزان الآلي القصيدة على ${target} (${METER_INFO[target] ? METER_INFO[target].feet : ''})${rawi ? ` وعلى روي «${rawi}»` : ''}، والرمز / متحرك وه ساكن. هذه الأبيات انكسرت:\n\n${w.problems.join('\n\n')}\n\nأعد نظم كل بيت منكسر كاملاً بمعناه وصورته في موضعه، لا ترقيعاً لكلمة، وأبقِ السليم كما هو حرفاً بحرف، وشكّل كل حرف، ثم سلّم القصيدة كلها من جديد بالترتيب نفسه مع الصنعة بالأداة submit_final.`);
-    cr = await callClaude({ model: composeModel, system: CRITIC_SYSTEM, messages: criticMsgs, tool: FINAL_TOOL, think: true, onProgress });
+    cr = await callClaude({ model: composeModel, system: CRITIC_SYSTEM, messages: criticMsgs, tool: FINAL_TOOL, think: true, effort: 'low', onProgress });
     cd = payload(cr);
     const fixed = cleanVerses(cd.verses);
     if (fixed.length === verses.length) verses = fixed;
@@ -380,7 +380,7 @@ export async function regenerateVerse(p, poem, index, check, onProgress = () => 
   let verse = null, result = null;
   for (let round = 0; round <= 2; round++) {
     onProgress(round === 0 ? 'ينظم بيتاً بديلاً…' : 'يعيد نظمه لأنه انكسر…');
-    const r = await callClaude({ model: composeModel, system: POET_SYSTEM, messages: msgs, tool: ONE_VERSE_TOOL, think: true, onProgress });
+    const r = await callClaude({ model: composeModel, system: POET_SYSTEM, messages: msgs, tool: ONE_VERSE_TOOL, think: true, effort: round === 0 ? 'medium' : 'low', onProgress });
     const d = payload(r);
     const v = cleanVerses([d.verse || d])[0];
     if (!v) continue;

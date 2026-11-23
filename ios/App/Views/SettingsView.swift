@@ -1,5 +1,6 @@
 // الإعدادات وعن «وزن»: مفتاح الذكاء الاصطناعي ونماذجه، وكيف يزن، والدقة، والمصادر، ورقم النسخة.
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -13,6 +14,7 @@ struct SettingsView: View {
     @State private var status = ""
     @State private var testing = false
     @State private var loaded = false
+    @State private var logCopied = false
 
     var body: some View {
         NavigationStack {
@@ -65,7 +67,7 @@ struct SettingsView: View {
                     Text("أبيات «المختارات» نصها وحركاتها من كتب تراث والشاملة أولاً، وما نقص من ضبطها أُكمل من دواوين ويكي مصدر. و«عيون المتنبي» اختيار الصاحب بن عباد، وشرحها من شرح الواحدي. وديوان المتنبي من ويكي مصدر مع شرح الواحدي، و«ديوان الحماسة» بشرح التبريزي من تراث، وبقية الدواوين من مجموعة «أشعار» المأخوذة من موقع الديوان، وضبطها كما في مصدرها، وتحقيقها على الطبعات المحققة جارٍ.")
                 }
                 Section("بلا إنترنت والخصوصية") {
-                    Text("الوزن والمختارات والدواوين والمساجلة كلها داخل التطبيق وتعمل بلا اتصال، ولا يُرسل شيء مما تكتب إلى أي مكان. أما «اكتب لي» و«اقترح تعديلاً» فيرسلان ما تكتبه فيهما إلى Anthropic عبر مفتاحك.")
+                    Text("الوزن والمختارات والدواوين والمساجلة كلها داخل التطبيق وتعمل بلا اتصال، ولا يُرسل شيء مما تكتب إلى أي مكان. أما «انظم» و«اقترح تعديلاً» فيرسلان ما تكتبه فيهما إلى Anthropic عبر مفتاحك.")
                 }
                 Section {
                     HStack {
@@ -73,6 +75,19 @@ struct SettingsView: View {
                         Spacer()
                         Text(AppInfo.version).foregroundStyle(C.muted)
                     }
+                    Button {
+                        let log = ComposeLog.shared.saved
+                        UIPasteboard.general.string = log.isEmpty ? "لا يوجد سجل نظم بعد." : log
+                        logCopied = true
+                    } label: {
+                        HStack {
+                            Text("نسخ سجل آخر نظم")
+                            Spacer()
+                            if logCopied { Text("نُسخ ✓").foregroundStyle(C.ok) }
+                        }
+                    }
+                } footer: {
+                    Text("إذا تأخر النظم أو تعثّر فانسخ السجل وأرسله، ففيه مدة كل مرحلة وما حدث فيها.")
                 }
             }
             .keyboardDone()

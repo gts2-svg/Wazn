@@ -1485,7 +1485,7 @@ ${msg}`;
   }
   var MAX_RETRY_TOKENS = 64e3;
   var noThinking = /* @__PURE__ */ new Set();
-  async function callClaude({ model, system, messages, maxTokens = 32e3, tool = null, onProgress = null, think = false }) {
+  async function callClaude({ model, system, messages, maxTokens = 32e3, tool = null, onProgress = null, think = false, effort = "high" }) {
     const { key } = getSettings();
     if (!key) throw new AIError("أضف مفتاح الـ API من الإعدادات أولاً.");
     const body = { model, max_tokens: maxTokens, system, messages };
@@ -1495,7 +1495,7 @@ ${msg}`;
     }
     if (think && !noThinking.has(model)) {
       body.thinking = { type: "adaptive" };
-      body.output_config = { effort: "high" };
+      body.output_config = { effort };
     }
     let data;
     try {
@@ -1751,7 +1751,7 @@ ${request}
 ${shown}
 
 اختر وقوّم، وسلّم القصيدة النهائية بالأداة submit_final.` }];
-    let cr = await callClaude({ model: composeModel, system: CRITIC_SYSTEM, messages: criticMsgs, tool: FINAL_TOOL, think: true, onProgress });
+    let cr = await callClaude({ model: composeModel, system: CRITIC_SYSTEM, messages: criticMsgs, tool: FINAL_TOOL, think: true, effort: "medium", onProgress });
     let cd = payload(cr);
     let verses = cleanVerses(cd.verses);
     let chosen = Math.min(Math.max(parseInt(cd.chosen, 10) || 1, 1), drafts.length) - 1;
@@ -1776,7 +1776,7 @@ ${w.problems.join("\n\n")}
 
 أعد نظم كل بيت منكسر كاملاً بمعناه وصورته في موضعه، لا ترقيعاً لكلمة، وأبقِ السليم كما هو حرفاً بحرف، وشكّل كل حرف، ثم سلّم القصيدة كلها من جديد بالترتيب نفسه مع الصنعة بالأداة submit_final.`
       );
-      cr = await callClaude({ model: composeModel, system: CRITIC_SYSTEM, messages: criticMsgs, tool: FINAL_TOOL, think: true, onProgress });
+      cr = await callClaude({ model: composeModel, system: CRITIC_SYSTEM, messages: criticMsgs, tool: FINAL_TOOL, think: true, effort: "low", onProgress });
       cd = payload(cr);
       const fixed = cleanVerses(cd.verses);
       if (fixed.length === verses.length) verses = fixed;
@@ -1815,7 +1815,7 @@ ${numbered(poem.verses)}
     let verse = null, result = null;
     for (let round = 0; round <= 2; round++) {
       onProgress(round === 0 ? "ينظم بيتاً بديلاً…" : "يعيد نظمه لأنه انكسر…");
-      const r = await callClaude({ model: composeModel, system: POET_SYSTEM, messages: msgs, tool: ONE_VERSE_TOOL, think: true, onProgress });
+      const r = await callClaude({ model: composeModel, system: POET_SYSTEM, messages: msgs, tool: ONE_VERSE_TOOL, think: true, effort: round === 0 ? "medium" : "low", onProgress });
       const d = payload(r);
       const v = cleanVerses([d.verse || d])[0];
       if (!v) continue;

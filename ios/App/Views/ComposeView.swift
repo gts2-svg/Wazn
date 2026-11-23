@@ -286,7 +286,34 @@ struct ComposeView: View {
 
     // MARK: - انظم
 
-    private var goButton: some View {
+    @ViewBuilder private var goButton: some View {
+        if runner.isRunning {
+            HStack(spacing: 10) {
+                HStack(spacing: 10) {
+                    ProgressView().tint(C.onAccent)
+                    Text("ينظم…").font(Fonts.verse(26, bold: true))
+                }
+                .foregroundStyle(C.onAccent)
+                .frame(maxWidth: .infinity, minHeight: 60)
+                .background(Capsule().fill(LinearGradient(colors: [style.tint.opacity(0.75), style.tint.opacity(0.5)], startPoint: .trailing, endPoint: .leading)))
+                Button { runner.cancel() } label: {
+                    Label("أوقف", systemImage: "stop.fill")
+                        .font(.headline)
+                        .foregroundStyle(C.bad)
+                        .padding(.horizontal, 18)
+                        .frame(minHeight: 60)
+                        .background(Capsule().fill(C.card))
+                        .overlay(Capsule().stroke(C.bad.opacity(0.5), lineWidth: 1.5))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.top, 6)
+        } else {
+            startButton
+        }
+    }
+
+    private var startButton: some View {
         Button(action: go) {
             HStack(spacing: 10) {
                 if runner.isRunning { ProgressView().tint(C.onAccent) }
@@ -393,23 +420,30 @@ struct PurposeCard: View {
     let p: PurposeStyle
     let on: Bool
     var body: some View {
-        ZStack(alignment: .topLeading) {
+        ZStack {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(LinearGradient(colors: [p.c1, p.c2], startPoint: .topTrailing, endPoint: .bottomLeading))
+            // الحرف الكبير خلف الاسم، شفيفاً
             Text(String(p.name.prefix(1)))
-                .font(Fonts.verse(120, bold: true))
-                .foregroundStyle(.white.opacity(0.08))
-                .offset(x: -18, y: -30)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(p.name).font(Fonts.verse(25, bold: true)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.7)
-                    .padding(.top, 20)
-                Spacer(minLength: 4)
-                Text(p.sample).font(Fonts.verse(13)).foregroundStyle(.white.opacity(0.8))
+                .font(Fonts.verse(110, bold: true))
+                .foregroundStyle(.white.opacity(0.09))
+                .offset(x: -30, y: -6)
+            // الاسم في وسط البطاقة
+            Text(p.name)
+                .font(Fonts.verse(p.name.count > 5 ? 24 : 30, bold: true))
+                .foregroundStyle(.white)
+                .lineLimit(1).minimumScaleFactor(0.6)
+                .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+                .padding(.horizontal, 10)
+                .offset(y: -6)
+            // الشاهد في الأسفل
+            VStack {
+                Spacer()
+                Text(p.sample).font(Fonts.verse(13)).foregroundStyle(.white.opacity(0.82))
                     .lineLimit(1).minimumScaleFactor(0.75)
-                    .padding(.bottom, 14)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 16)
             }
-            .padding(.horizontal, 14).padding(.vertical, 10)
         }
         .frame(width: 136, height: 164)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
