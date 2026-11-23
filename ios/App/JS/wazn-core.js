@@ -1643,19 +1643,40 @@ ${CRAFT_GUIDE}
 سلّم باستدعاء الأداة submit_final دائماً، ولا تكتب الأبيات نصاً خارج الأداة.`;
   var PURPOSES = ["مدح", "تهنئة", "رثاء", "شكر", "حكمة", "غزل عفيف", "هجاء"];
   var VERSE_ITEM = { type: "object", properties: { sadr: { type: "string" }, ajz: { type: "string" }, craft: { type: "string", description: "صنعة البيت في سطر" } }, required: ["sadr", "ajz", "craft"] };
-  var DRAFTS_TOOL = {
-    name: "submit_drafts",
-    description: "سلّم صياغات القصيدة، كل بيت مشكول تشكيلاً كاملاً ومعه صنعته.",
-    input_schema: {
-      type: "object",
-      properties: {
-        meter: { type: "string", description: "اسم البحر" },
-        rawi: { type: "string", description: "حرف الروي" },
-        drafts: { type: "array", items: { type: "object", properties: { verses: { type: "array", items: VERSE_ITEM } }, required: ["verses"] } }
-      },
-      required: ["meter", "drafts"]
+  function draftsTool(n, count) {
+    const props = { meter: { type: "string", description: "اسم البحر" }, rawi: { type: "string", description: "حرف الروي" } };
+    const req = ["meter"];
+    for (let i = 1; i <= n; i++) {
+      props[`draft${i}`] = { type: "array", items: VERSE_ITEM, description: `الصياغة ${i}: قصيدة كاملة من ${count} أبيات بالضبط` };
+      req.push(`draft${i}`);
     }
-  };
+    return {
+      name: "submit_drafts",
+      description: n > 1 ? `سلّم ${n} صياغات مستقلة، كل صياغة قصيدة كاملة من ${count} أبيات بالضبط في خانتها، وكل بيت مشكول ومعه صنعته.` : `سلّم القصيدة: ${count} أبيات بالضبط، كل بيت مشكول ومعه صنعته.`,
+      input_schema: { type: "object", properties: props, required: req }
+    };
+  }
+  function collectDrafts(pd, count) {
+    const raw = [];
+    for (let i = 1; i <= 5; i++) if (pd[`draft${i}`]) raw.push(pd[`draft${i}`]);
+    if (Array.isArray(pd.drafts)) for (const d of pd.drafts) raw.push(Array.isArray(d) ? d : d && d.verses);
+    if (!raw.length && pd.verses) raw.push(pd.verses);
+    const out = [];
+    for (const r of raw) {
+      const vs = cleanVerses(Array.isArray(r) ? r : []);
+      if (!vs.length) continue;
+      if (vs.length > count && vs.length % count === 0) {
+        for (let k = 0; k < vs.length; k += count) out.push(vs.slice(k, k + count));
+      } else out.push(vs.slice(0, Math.max(count, 1)));
+    }
+    const seen = /* @__PURE__ */ new Set();
+    return out.filter((d) => {
+      const k = d.map(verseText).join("|");
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }
   var FINAL_TOOL = {
     name: "submit_final",
     description: "سلّم القصيدة النهائية مشكولة، مع صنعة كل بيت وحكم الناقد.",
@@ -1719,15 +1740,14 @@ ${ex.join("\n")}` : "";
     const nDrafts = p.count <= DRAFTS_UP_TO ? 3 : 1;
     const request = requestText(p);
     onProgress("يتأمّل ويخطّط للقصيدة…");
-    const ask = nDrafts > 1 ? `اكتب ثلاث صياغات مستقلة للقصيدة، تختلف في المدخل والصور والأساليب، لا تنويعات لفظية على صياغة واحدة.` : "اكتب صياغة واحدة للقصيدة.";
+    const ask = nDrafts > 1 ? `اكتب ثلاث صياغات مستقلة للقصيدة، كل صياغة قصيدة كاملة من ${p.count} أبيات بالضبط، تختلف في المدخل والصور والأساليب، لا تنويعات لفظية على صياغة واحدة. وفي الصياغة الواحدة لا يكرر بيتٌ معنى بيت آخر؛ كل بيت يضيف معنى جديداً.` : `اكتب القصيدة في ${p.count} أبيات بالضبط، كل بيت يضيف معنى جديداً ولا يكرر معنى غيره.`;
     const poetMsgs = [{ role: "user", content: `${request}${exemplarText(p)}
 
 ${ask}
 سلّم باستدعاء الأداة submit_drafts.` }];
-    const pr = await callClaude({ model: composeModel, system: POET_SYSTEM, messages: poetMsgs, tool: DRAFTS_TOOL, think: true, onProgress });
+    const pr = await callClaude({ model: composeModel, system: POET_SYSTEM, messages: poetMsgs, tool: draftsTool(nDrafts, p.count), think: true, onProgress });
     const pd = payload(pr);
-    let drafts = (Array.isArray(pd.drafts) ? pd.drafts : []).map((d) => cleanVerses(d && d.verses)).filter((d) => d.length);
-    if (!drafts.length && pd.verses) drafts = [cleanVerses(pd.verses)].filter((d) => d.length);
+    const drafts = collectDrafts(pd, p.count);
     if (!drafts.length) {
       const er = new AIError("لم تصل أبيات. افتح «تفاصيل الخطأ» وصوّرها.");
       er.diag = `stop: ${pr.stop}
@@ -1750,13 +1770,13 @@ ${request}
 
 ${shown}
 
-اختر وقوّم، وسلّم القصيدة النهائية بالأداة submit_final.` }];
+اختر وقوّم، وسلّم القصيدة النهائية بالأداة submit_final، وهي ${p.count} أبيات بالضبط، لا يكرر بيت منها معنى غيره.` }];
     let cr = await callClaude({ model: composeModel, system: CRITIC_SYSTEM, messages: criticMsgs, tool: FINAL_TOOL, think: true, effort: "medium", onProgress });
     let cd = payload(cr);
     let verses = cleanVerses(cd.verses);
     let chosen = Math.min(Math.max(parseInt(cd.chosen, 10) || 1, 1), drafts.length) - 1;
     const verdict = String(cd.verdict || "").trim();
-    if (!verses.length) verses = drafts[chosen].map((v) => ({ ...v }));
+    if (verses.length !== drafts[chosen].length) verses = drafts[chosen].map((v) => ({ ...v }));
     onProgress("يزن القصيدة…");
     if (!rawi) {
       const res0 = await check2(verses.map((v) => ({ parts: [v.sadr, v.ajz], meter: target })));
