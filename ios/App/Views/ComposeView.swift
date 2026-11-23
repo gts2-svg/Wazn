@@ -411,9 +411,9 @@ struct PurposeCard: View {
                 Text(p.name).font(Fonts.verse(25, bold: true)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.7)
                     .padding(.top, 10)
                 Spacer(minLength: 4)
-                Text(p.sample).font(Fonts.verse(13)).foregroundStyle(.white.opacity(0.8)).lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.bottom, 6)
+                Text(p.sample).font(Fonts.verse(13)).foregroundStyle(.white.opacity(0.8))
+                    .lineLimit(1).minimumScaleFactor(0.75)
+                    .padding(.bottom, 4)
             }
             .padding(.horizontal, 14).padding(.vertical, 10)
         }
