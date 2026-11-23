@@ -107,7 +107,6 @@ struct ComposeView: View {
                     }
                 }
             }
-            .toolbarBackground(.hidden, for: .navigationBar)
             .navigationBarTitleDisplayMode(.inline)
             .settingsButton()
             .sheet(isPresented: $showWho) {
@@ -404,11 +403,11 @@ struct PurposeCard: View {
                 .frame(maxWidth: .infinity, alignment: .trailing)
             VStack(alignment: .leading, spacing: 0) {
                 Text(p.name).font(Fonts.verse(25, bold: true)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.7)
-                    .padding(.top, 24)
+                    .padding(.top, 20)
                 Spacer(minLength: 4)
                 Text(p.sample).font(Fonts.verse(13)).foregroundStyle(.white.opacity(0.8))
                     .lineLimit(1).minimumScaleFactor(0.75)
-                    .padding(.bottom, 4)
+                    .padding(.bottom, 14)
             }
             .padding(.horizontal, 14).padding(.vertical, 10)
         }
